@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, TextInput } from "react-native";
+import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../components/AppButton";
+import { ScreenTopBar } from "../components/ScreenTopBar";
 import { RootStackParamList } from "../navigation/types";
 import { useWaitingList } from "../storage/storage";
 import { colors, spacing } from "../theme/theme";
@@ -46,7 +47,9 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <View style={styles.screen}>
+      <ScreenTopBar navigation={navigation} />
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <Text style={styles.title}>{editing ? "Edit item" : "Add item"}</Text>
       <Text style={styles.label}>Idea, URL, or media URI</Text><TextInput style={[styles.input, styles.body]} multiline value={content} onChangeText={setContent} placeholder="Paste or type something worth saving..." />
       <AppButton label="Suggest title, folder & tags" variant="secondary" onPress={applySuggestion} style={styles.button} />
@@ -57,13 +60,15 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
       <Text style={styles.section}>Status</Text>{statuses.map((choice) => <Text key={choice} onPress={() => setStatus(choice)} style={[styles.choice, status === choice && styles.selected]}>{choice}</Text>)}
       <Text style={styles.section}>Priority</Text>{priorities.map((choice) => <Text key={choice} onPress={() => setPriority(choice)} style={[styles.choice, priority === choice && styles.selected]}>{choice}</Text>)}
       <AppButton label="Save item" onPress={save} style={styles.button} />
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: colors.background, flex: 1 },
-  content: { padding: spacing.lg, paddingTop: 64 },
+  screen: { backgroundColor: colors.background, flex: 1 },
+  scroll: { flex: 1 },
+  content: { padding: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.xl },
   title: { color: colors.ink, fontSize: 32, fontWeight: "900", marginBottom: spacing.lg },
   label: { color: colors.muted, fontWeight: "800", marginBottom: spacing.xs, marginTop: spacing.md },
   input: { backgroundColor: colors.surface, borderRadius: 16, color: colors.ink, padding: spacing.md },

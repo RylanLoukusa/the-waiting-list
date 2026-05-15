@@ -8,7 +8,10 @@ declare module "react" {
   export function useEffect(effect: () => void | (() => void), deps?: unknown[]): void;
   export function useMemo<T>(factory: () => T, deps?: unknown[]): T;
   export function useCallback<T extends (...args: any[]) => any>(callback: T, deps?: unknown[]): T;
-  const React: { Fragment: FC<{ children?: ReactNode }> };
+  const React: {
+    Fragment: FC<{ children?: ReactNode }>;
+    memo: <P>(component: (props: P) => JSX.Element) => (props: P) => JSX.Element;
+  };
   export default React;
 }
 
@@ -31,7 +34,14 @@ declare module "react-native" {
   export const Alert: { alert: (title: string, message?: string, buttons?: Array<{ text: string; style?: string; onPress?: () => void }>) => void };
   export const Linking: { openURL: (url: string) => Promise<unknown> };
   export const Modal: (props: Record<string, unknown>) => JSX.Element;
-  export const Pressable: (props: { children?: unknown; onPress?: () => void; style?: StyleInput | ((state: PressableState) => StyleInput) }) => JSX.Element;
+  export const Pressable: (props: {
+    children?: unknown;
+    onPress?: () => void;
+    style?: StyleInput | ((state: PressableState) => StyleInput);
+    accessibilityRole?: string;
+    accessibilityLabel?: string;
+    hitSlop?: number;
+  }) => JSX.Element;
   export const ScrollView: (props: Record<string, unknown>) => JSX.Element;
   export const StyleSheet: { create: <T extends Record<string, unknown>>(styles: T) => T };
   export const Text: (props: Record<string, unknown>) => JSX.Element;
@@ -54,6 +64,7 @@ declare module "@react-navigation/native-stack" {
       navigate: (screen: keyof ParamList, params?: ParamList[keyof ParamList]) => void;
       replace: (screen: keyof ParamList, params?: ParamList[keyof ParamList]) => void;
       goBack: () => void;
+      canGoBack: () => boolean;
     };
     route: { params: ParamList[RouteName] };
   };
@@ -64,4 +75,7 @@ declare module "@react-navigation/native-stack" {
 }
 
 declare module "expo-status-bar" { export const StatusBar: (props: Record<string, unknown>) => JSX.Element; }
-declare module "react-native-safe-area-context" { export const SafeAreaProvider: (props: Record<string, unknown>) => JSX.Element; }
+declare module "react-native-safe-area-context" {
+  export const SafeAreaProvider: (props: Record<string, unknown>) => JSX.Element;
+  export function useSafeAreaInsets(): { top: number; bottom: number; left: number; right: number };
+}

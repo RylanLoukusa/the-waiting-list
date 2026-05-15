@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TextInput } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../components/AppButton";
+import { ScreenTopBar } from "../components/ScreenTopBar";
 import { RootStackParamList } from "../navigation/types";
 import { useWaitingList } from "../storage/storage";
 import { colors, spacing } from "../theme/theme";
@@ -38,7 +39,9 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
   const parentChoices = editing ? folders.filter((folder) => folder.id !== editing.id && canMoveFolder(folders, editing.id, folder.id)) : folders.filter((folder) => canAddChildFolder(folders, folder.id));
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <View style={styles.screen}>
+      <ScreenTopBar navigation={navigation} />
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <Text style={styles.title}>{editing ? "Edit folder" : "New folder"}</Text>
       <Text style={styles.label}>Name</Text><TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Weekend Ideas" />
       <Text style={styles.label}>Icon</Text><TextInput style={styles.input} value={icon} onChangeText={setIcon} />
@@ -47,13 +50,15 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
       <Text onPress={() => setParentFolderId(null)} style={[styles.choice, parentFolderId === null && styles.selected]}>Home</Text>
       {parentChoices.map((folder) => <Text key={folder.id} onPress={() => setParentFolderId(folder.id)} style={[styles.choice, parentFolderId === folder.id && styles.selected]}>{getFolderPathLabel(folders, folder.id)}</Text>)}
       <AppButton label="Save folder" onPress={save} style={styles.save} />
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: colors.background, flex: 1 },
-  content: { padding: spacing.lg, paddingTop: 64 },
+  screen: { backgroundColor: colors.background, flex: 1 },
+  scroll: { flex: 1 },
+  content: { padding: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.xl },
   title: { color: colors.ink, fontSize: 32, fontWeight: "900", marginBottom: spacing.lg },
   label: { color: colors.muted, fontWeight: "800", marginBottom: spacing.xs, marginTop: spacing.md },
   input: { backgroundColor: colors.surface, borderRadius: 16, color: colors.ink, padding: spacing.md },
