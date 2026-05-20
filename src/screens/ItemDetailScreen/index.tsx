@@ -2,6 +2,7 @@ import React, { useCallback } from "react";
 import { Alert, Linking, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
+import { MediaDisplay } from "../../components/MediaDisplay";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { RootStackParamList } from "../../navigation/types";
 import { useWaitingList } from "../../storage/storage";
@@ -71,12 +72,7 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
           </View>
         )}
 
-        {!!item.mediaUri && (
-          <View style={styles.preview}>
-            <Text style={styles.previewTitle}>{item.type === "video" ? "Video" : "Image"} preview</Text>
-            <Text style={styles.url}>{item.mediaUri}</Text>
-          </View>
-        )}
+        <MediaDisplay media={item.media} style={styles.preview} />
 
         {!!item.description && <Text style={styles.description}>{item.description}</Text>}
 

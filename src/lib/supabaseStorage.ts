@@ -1,0 +1,120 @@
+import { getSupabase } from "./supabase";
+import * as FileSystem from "expo-file-system/legacy";
+
+const STORAGE_BUCKET = "media";
+
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return bytes;
+}
+
+/**
+ * Upload a file from the device to Supabase Storage.
+ * @param fileUri - local file URI (e.g., from image picker or camera roll)
+ * @param itemId - item ID to organize files
+ * @param fileType - "image" or "video"
+ * @returns storage path on success, null on error
+ */
+export async function uploadMediaToSupabase(
+  fileUri: string,
+  itemId: string,
+  fileType: "image" | "video"
+): Promise<{ storagePath: string } | { error: string }> {
+  const supabase = getSupabase();
+  if (!supabase) {
+    return { error: "Supabase not configured" };
+  }
+
+  try {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError) {
+      return { error: userError.message };
+    }
+
+    if (!user) {
+      return { error: "You must be signed in to upload media" };
+    }
+
+    // Read file as base64
+    const base64 = await FileSystem.readAsStringAsync(fileUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    // Determine file extension
+    const ext = fileUri.split(".").pop() || (fileType === "video" ? "mp4" : "jpg");
+    const fileName = `${user.id}/${itemId}/${Date.now()}.${ext}`;
+
+    // Upload to Supabase Storage
+    const { error } = await supabase.storage.from(STORAGE_BUCKET).upload(fileName, base64ToUint8Array(base64), {
+      contentType: fileType === "video" ? "video/mp4" : "image/jpeg",
+      upsert: false,
+    });
+
+    if (error) {
+      return { error: error.message };
+    }
+
+    return { storagePath: fileName };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Upload failed" };
+  }
+}
+
+/**
+ * Get a signed URL for a stored file (valid for 1 hour by default).
+ * @param storagePath - path returned from uploadMediaToSupabase
+ * @param expiresIn - seconds until URL expires (default: 3600)
+ * @returns signed URL or null
+ */
+export async function getSignedMediaUrl(storagePath: string, expiresIn: number = 3600): Promise<string | null> {
+  const supabase = getSupabase();
+  if (!supabase || !storagePath) return null;
+
+  try {
+    const { data, error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .createSignedUrl(storagePath, expiresIn);
+
+    if (error) {
+      console.error("Failed to create signed URL:", error.message);
+      return null;
+    }
+
+    return data?.signedUrl || null;
+  } catch (err) {
+    console.error("Error creating signed URL:", err);
+    return null;
+  }
+}
+
+/**
+ * Delete a file from Supabase Storage.
+ * @param storagePath - path to delete
+ * @returns true if deleted, false otherwise
+ */
+export async function deleteMediaFromSupabase(storagePath: string): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase || !storagePath) return false;
+
+  try {
+    const { error } = await supabase.storage.from(STORAGE_BUCKET).remove([storagePath]);
+    if (error) {
+      console.error("Failed to delete file:", error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("Error deleting file:", err);
+    return false;
+  }
+}

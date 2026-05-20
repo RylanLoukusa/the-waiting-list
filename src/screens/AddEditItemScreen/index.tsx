@@ -1,9 +1,11 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, ScrollView, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
+import { MediaPicker } from "../../components/MediaPicker";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { RootStackParamList } from "../../navigation/types";
+import { uploadMediaToSupabase } from "../../lib/supabaseStorage";
 import { useWaitingList } from "../../storage/storage";
 import { ItemPriority, ItemStatus, ItemType } from "../../types/models";
 import { detectItemType, suggestFolders, suggestTags, suggestTitle } from "../../utils/folderSuggestions";
@@ -28,6 +30,11 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
   const [tags, setTags] = useState(editing?.tags.join(", ") ?? "");
   const [status, setStatus] = useState<ItemStatus>(editing?.status ?? "waiting");
   const [priority, setPriority] = useState<ItemPriority>(editing?.priority ?? "medium");
+  const [selectedMediaUri, setSelectedMediaUri] = useState<string | undefined>(editing?.mediaUri);
+  const [selectedMediaType, setSelectedMediaType] = useState<"image" | "video" | undefined>(
+    editing?.type === "image" ? "image" : editing?.type === "video" ? "video" : undefined
+  );
+  const [isSaving, setIsSaving] = useState(false);
 
   const applySuggestion = useCallback((): void => {
     setTitle(suggestTitle(content));
@@ -36,41 +43,66 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
     if (suggestions[0]) setFolderId(suggestions[0].folder.id);
   }, [content, suggestions]);
 
-  const save = useCallback((): void => {
-    const payload = {
-      folderId,
-      title: title || suggestTitle(content),
-      description: content,
-      type,
-      url: type === "link" ? content : undefined,
-      mediaUri: type === "image" || type === "video" ? content : undefined,
-      tags: tags
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean),
-      status,
-      priority,
-    };
-    if (editing) {
-      updateItem(editing.id, payload);
-      navigation.goBack();
-    } else {
-      const item = createItem(payload);
-      navigation.replace("ItemDetail", { itemId: item.id });
+  const handleMediaSelected = useCallback((uri: string, mediaType: "image" | "video") => {
+    setSelectedMediaUri(uri);
+    setSelectedMediaType(mediaType);
+  }, []);
+
+  const save = useCallback(async (): Promise<void> => {
+    setIsSaving(true);
+    try {
+      let mediaMetadata = undefined;
+
+      // Upload media to Supabase Storage if selected
+      if ((type === "image" || type === "video") && selectedMediaUri) {
+        const tempId = editing?.id || `temp-${Date.now()}`;
+        const uploadResult = await uploadMediaToSupabase(selectedMediaUri, tempId, selectedMediaType || "image");
+
+        if ("error" in uploadResult) {
+          Alert.alert("Upload failed", uploadResult.error);
+          setIsSaving(false);
+          return;
+        }
+
+        mediaMetadata = {
+          storagePath: uploadResult.storagePath,
+          mediaType: selectedMediaType,
+        };
+      }
+
+      // Handle TikTok URLs
+      if (type === "video" && content.includes("tiktok")) {
+        mediaMetadata = {
+          tiktokUrl: content,
+        };
+      }
+
+      const payload = {
+        folderId,
+        title: title || suggestTitle(content),
+        description: type === "video" && content.includes("tiktok") ? undefined : content,
+        type,
+        url: type === "link" ? content : undefined,
+        media: mediaMetadata,
+        tags: tags
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+        status,
+        priority,
+      };
+
+      if (editing) {
+        updateItem(editing.id, payload);
+        navigation.goBack();
+      } else {
+        const item = createItem(payload);
+        navigation.replace("ItemDetail", { itemId: item.id });
+      }
+    } finally {
+      setIsSaving(false);
     }
-  }, [
-    content,
-    createItem,
-    editing,
-    folderId,
-    navigation,
-    priority,
-    status,
-    tags,
-    title,
-    type,
-    updateItem,
-  ]);
+  }, [content, createItem, editing, folderId, navigation, priority, selectedMediaType, selectedMediaUri, status, tags, title, type, updateItem]);
 
   return (
     <View style={styles.screen}>
@@ -98,6 +130,10 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
             {choice}
           </Text>
         ))}
+
+        {(type === "image" || type === "video") && (
+          <MediaPicker onMediaSelected={handleMediaSelected} initialUri={selectedMediaUri} style={styles.button} />
+        )}
 
         <Text style={styles.section}>Folder</Text>
         {suggestions.map((suggestion) => (
@@ -149,7 +185,8 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
           </Text>
         ))}
 
-        <AppButton label="Save item" onPress={save} style={styles.button} />
+        <AppButton label={isSaving ? "Saving..." : "Save item"} onPress={save} disabled={isSaving} style={styles.button} />
+        {isSaving && <ActivityIndicator size="large" style={styles.button} />}
       </ScrollView>
     </View>
   );

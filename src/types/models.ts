@@ -12,6 +12,13 @@ export type Folder = {
   updatedAt: string;
 };
 
+export type MediaMetadata = {
+  storagePath?: string; // path in Supabase Storage bucket
+  mediaType?: "image" | "video"; // type of file in storage
+  tiktokUrl?: string; // external TikTok URL
+  thumbnailPath?: string; // path to thumbnail in storage
+};
+
 export type SavedItem = {
   id: string;
   folderId: string;
@@ -19,8 +26,9 @@ export type SavedItem = {
   description?: string;
   type: ItemType;
   url?: string;
-  mediaUri?: string;
-  thumbnailUri?: string;
+  mediaUri?: string; // local URI during editing
+  thumbnailUri?: string; // local thumbnail URI during editing
+  media?: MediaMetadata; // metadata for stored media
   tags: string[];
   status: ItemStatus;
   priority: ItemPriority;

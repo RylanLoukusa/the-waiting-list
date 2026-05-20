@@ -1,12 +1,12 @@
 import React from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { NavigationProp } from "@react-navigation/native";
 import { ArrowLeftIcon, MenuIcon } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { RootStackParamList } from "../navigation/types";
 import { colors, spacing } from "../theme/theme";
 
-type Navigation = NativeStackScreenProps<RootStackParamList, "Home">["navigation"];
+type Navigation = NavigationProp<RootStackParamList>;
 
 type Props = {
   navigation: Navigation;

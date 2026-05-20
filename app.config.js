@@ -13,11 +13,23 @@ module.exports = {
     ...appJson.expo,
     android: {
       package: "com.rylanloukusa.thewaitinglist",
+      adaptiveIcon: {
+        foregroundImage: "./assets/icon.png",
+        backgroundColor: "#FFFFFF",
+      },
     },
     plugins: [
       googleIosUrlScheme
         ? ["@react-native-google-signin/google-signin", { iosUrlScheme: googleIosUrlScheme }]
         : "@react-native-google-signin/google-signin",
+      [
+        "expo-image-picker",
+        {
+          photosPermission: "Allow The Waiting List to access your photos and videos so you can attach media to saved items.",
+          cameraPermission: "Allow The Waiting List to use your camera so you can capture media for saved items.",
+          microphonePermission: "Allow The Waiting List to use your microphone when capturing videos.",
+        },
+      ],
     ],
     extra: {
       eas: {

@@ -3,6 +3,7 @@
     "name": "The Waiting List",
     "slug": "the-waiting-list",
     "scheme": "thewaitinglist",
+    "icon": "./assets/icon.png",
     "ios": {
       "bundleIdentifier": "com.rylanloukusa.thewaitinglist"
     }

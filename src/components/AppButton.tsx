@@ -9,19 +9,24 @@ type Props = {
   onPress: () => void;
   variant?: Variant;
   style?: ViewStyle;
+  disabled?: boolean;
 };
 
-export const AppButton = ({ label, onPress, variant = "primary", style }: Props) => (
+export const AppButton = ({ label, onPress, variant = "primary", style, disabled = false }: Props) => (
   <Pressable
     onPress={onPress}
+    disabled={disabled}
     style={({ pressed }: { pressed: boolean }) => [
       styles.base,
       styles[variant],
-      pressed && styles.pressed,
+      pressed && !disabled && styles.pressed,
+      disabled && styles.disabled,
       style,
     ]}
   >
-    <Text style={[styles.text, variant !== "primary" && styles.secondaryText]}>{label}</Text>
+    <Text style={[styles.text, variant !== "primary" && styles.secondaryText, disabled && styles.disabledText]}>
+      {label}
+    </Text>
   </Pressable>
 );
 
@@ -39,4 +44,6 @@ const styles = StyleSheet.create({
   text: { color: colors.surface, fontSize: 15, fontWeight: "800" },
   secondaryText: { color: colors.ink },
   pressed: { opacity: 0.78 },
+  disabled: { opacity: 0.5 },
+  disabledText: { opacity: 0.7 },
 });
