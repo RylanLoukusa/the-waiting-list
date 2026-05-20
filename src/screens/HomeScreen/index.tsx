@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
 import { EmptyState } from "../../components/EmptyState";
@@ -9,6 +9,7 @@ import { QuickAddModal } from "../../components/QuickAddModal";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { RootStackParamList } from "../../navigation/types";
 import { useWaitingList } from "../../storage/storage";
+import { useAuth } from "../../auth/AuthContext";
 import { Folder, SavedItem } from "../../types/models";
 import { getChildFolders, getDescendantFolderIds, getFolderPathLabel } from "../../utils/folderTree";
 import { styles } from "./styles";
@@ -45,6 +46,7 @@ const RecentItemRow = React.memo(function RecentItemRow({ item, folderPath, onOp
 
 export const HomeScreen = ({ navigation }: Props) => {
   const { folders, items } = useWaitingList();
+  const { session, signOut } = useAuth();
   const [quickAddOpen, setQuickAddOpen] = useState(false);
 
   const onCloseQuickAdd = useCallback(() => {
@@ -85,6 +87,26 @@ export const HomeScreen = ({ navigation }: Props) => {
     navigation.navigate("Settings");
   }, [navigation]);
 
+  const onPressLogin = useCallback(() => {
+    navigation.navigate("Login");
+  }, [navigation]);
+
+  const onSignOut = useCallback(async () => {
+    await signOut();
+  }, [signOut]);
+
+  const onOpenMenu = useCallback(() => {
+    const buttons = [
+      { text: "Settings", onPress: onPressSettings },
+      session?.user
+        ? { text: "Logout", style: "destructive" as const, onPress: onSignOut }
+        : { text: "Login", onPress: onPressLogin },
+      { text: "Cancel", style: "cancel" as const },
+    ];
+
+    Alert.alert("Menu", "Choose an action", buttons);
+  }, [onPressSettings, onPressLogin, onSignOut, session?.user]);
+
   const topFolders = getChildFolders(folders, null);
   const recentItems = [...items]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -97,7 +119,7 @@ export const HomeScreen = ({ navigation }: Props) => {
 
   return (
     <View style={styles.screen}>
-      <ScreenTopBar navigation={navigation} showBack={false} />
+      <ScreenTopBar navigation={navigation} showBack={false} onMenuPress={onOpenMenu} />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <Text style={styles.kicker}>Save ideas now. Pick the perfect one later.</Text>
         <Text style={styles.title}>The Waiting List</Text>

@@ -1,17 +1,56 @@
 import React from "react";
-import { Pressable, ScrollView, StyleSheet, Text } from "react-native";
-import { Folder } from "../types/models";
-import { colors, spacing } from "../theme/theme";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import type { Folder } from "../types/models";
+import { colors, radius, spacing } from "../theme/theme";
 
-export const Breadcrumbs = ({ path, onHome, onFolder }: { path: Folder[]; onHome: () => void; onFolder: (folderId: string) => void }) => (
-  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-    <Pressable onPress={onHome}><Text style={styles.crumb}>Home</Text></Pressable>
-    {path.map((folder) => <React.Fragment key={folder.id}><Text style={styles.sep}>›</Text><Pressable onPress={() => onFolder(folder.id)}><Text style={styles.crumb}>{folder.name}</Text></Pressable></React.Fragment>)}
-  </ScrollView>
+type Props = {
+  path: Folder[];
+  onHome: () => void;
+  onFolder: (folderId: string) => void;
+};
+
+export const Breadcrumbs = ({ path, onHome, onFolder }: Props) => (
+  <View style={styles.row}>
+    <Pressable onPress={onHome} style={styles.crumbHit}>
+      <Text style={styles.crumb}>Home</Text>
+    </Pressable>
+    {path.map((folder) => (
+      <React.Fragment key={folder.id}>
+        <Text style={styles.sep}>›</Text>
+        <Pressable onPress={() => onFolder(folder.id)} style={styles.crumbHit}>
+          <Text style={styles.crumb}>{folder.name}</Text>
+        </Pressable>
+      </React.Fragment>
+    ))}
+  </View>
 );
 
 const styles = StyleSheet.create({
-  row: { alignItems: "center", paddingVertical: spacing.sm },
-  crumb: { color: colors.accentDark, fontSize: 14, fontWeight: "800" },
-  sep: { color: colors.muted, marginHorizontal: spacing.xs },
+  row: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 2,
+    marginBottom: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  crumbHit: {
+    borderRadius: radius.sm,
+    justifyContent: "center",
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xs,
+  },
+  crumb: {
+    color: colors.accentDark,
+    fontSize: 16,
+    fontWeight: "900",
+    letterSpacing: 0.2,
+  },
+  sep: {
+    color: colors.muted,
+    fontSize: 18,
+    fontWeight: "700",
+    marginHorizontal: spacing.xs,
+    opacity: 0.85,
+  },
 });

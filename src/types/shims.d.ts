@@ -8,6 +8,7 @@ declare module "react" {
   export function useEffect(effect: () => void | (() => void), deps?: unknown[]): void;
   export function useMemo<T>(factory: () => T, deps?: unknown[]): T;
   export function useCallback<T extends (...args: any[]) => any>(callback: T, deps?: unknown[]): T;
+  export function useRef<T>(initialValue: T): { current: T };
   const React: {
     Fragment: FC<{ children?: ReactNode }>;
     memo: <P>(component: (props: P) => JSX.Element) => (props: P) => JSX.Element;
@@ -31,6 +32,7 @@ type StyleInput = unknown;
 
 declare module "react-native" {
   export type ViewStyle = Record<string, unknown>;
+  export const ActivityIndicator: (props: Record<string, unknown>) => JSX.Element;
   export const Alert: { alert: (title: string, message?: string, buttons?: Array<{ text: string; style?: string; onPress?: () => void }>) => void };
   export const Linking: { openURL: (url: string) => Promise<unknown> };
   export const Modal: (props: Record<string, unknown>) => JSX.Element;
@@ -47,10 +49,15 @@ declare module "react-native" {
   export const Text: (props: Record<string, unknown>) => JSX.Element;
   export const TextInput: (props: Record<string, unknown>) => JSX.Element;
   export const View: (props: Record<string, unknown>) => JSX.Element;
+  export const Platform: { OS: string };
 }
 
 declare module "@react-native-async-storage/async-storage" {
-  const AsyncStorage: { getItem: (key: string) => Promise<string | null>; setItem: (key: string, value: string) => Promise<void> };
+  const AsyncStorage: {
+    getItem: (key: string) => Promise<string | null>;
+    setItem: (key: string, value: string) => Promise<void>;
+    removeItem: (key: string) => Promise<void>;
+  };
   export default AsyncStorage;
 }
 
@@ -79,3 +86,12 @@ declare module "react-native-safe-area-context" {
   export const SafeAreaProvider: (props: Record<string, unknown>) => JSX.Element;
   export function useSafeAreaInsets(): { top: number; bottom: number; left: number; right: number };
 }
+
+declare const process: {
+  env: {
+    EXPO_PUBLIC_SUPABASE_URL?: string;
+    EXPO_PUBLIC_SUPABASE_ANON_KEY?: string;
+    EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?: string;
+    EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?: string;
+  };
+};

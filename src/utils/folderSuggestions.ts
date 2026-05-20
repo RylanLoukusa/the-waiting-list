@@ -10,11 +10,18 @@ const keywordRules = [
   { keywords: ["travel", "trip", "visit", "lake", "hike", "museum"], targets: ["Places > Local", "Places > Travel", "Weekend Ideas"] },
 ];
 
+const videoExt = /\.(mov|mp4|m4v|webm)(\?|$)/i;
+const imageExt = /\.(png|jpg|jpeg|gif|webp)(\?|$)/i;
+
 export const detectItemType = (content: string, mediaUri?: string): ItemType => {
   const text = content.trim().toLowerCase();
   if (mediaUri?.match(/\.(mov|mp4|m4v|webm)$/i)) return "video";
   if (mediaUri?.match(/\.(png|jpg|jpeg|gif|webp)$/i)) return "image";
-  if (/^https?:\/\//i.test(text)) return text.match(/\.(mov|mp4|m4v|webm)(\?|$)/) ? "video" : text.match(/\.(png|jpg|jpeg|gif|webp)(\?|$)/) ? "image" : "link";
+  if (/^https?:\/\//i.test(text)) {
+    if (videoExt.test(text)) return "video";
+    if (imageExt.test(text)) return "image";
+    return "link";
+  }
   return "text";
 };
 

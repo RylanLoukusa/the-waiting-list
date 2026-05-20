@@ -1,6 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "react-native";
+import { useAuth } from "../auth/AuthContext";
+import { getSupabase } from "../lib/supabase";
+import { ensureRemoteRowForUser, pullWaitingListForUser, pushWaitingListForUser } from "../sync/waitingListSync";
 import { seedData } from "../data/seedData";
 import { Folder, SavedItem, WaitingListData } from "../types/models";
 import { createId } from "../utils/id";
@@ -34,9 +37,13 @@ export const saveWaitingListData = async (data: WaitingListData): Promise<void> 
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 };
 
-export const WaitingListProvider = ({ children }: { children: ReactNode }) => {
+const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
+  const { session, isAuthReady } = useAuth();
   const [data, setData] = useState<WaitingListData>(seedData);
   const [isReady, setIsReady] = useState(false);
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const skipRemotePushRef = useRef(true);
 
   useEffect(() => {
     loadWaitingListData()
@@ -50,6 +57,59 @@ export const WaitingListProvider = ({ children }: { children: ReactNode }) => {
       void saveWaitingListData(data);
     }
   }, [data, isReady]);
+
+  useEffect(() => {
+    if (!isReady || !isAuthReady) return;
+    const userId = session?.user?.id;
+    if (!userId) {
+      skipRemotePushRef.current = false;
+      return;
+    }
+
+    const supabase = getSupabase();
+    if (!supabase) {
+      skipRemotePushRef.current = false;
+      return;
+    }
+
+    skipRemotePushRef.current = true;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const result = await pullWaitingListForUser(supabase, userId);
+        if (cancelled) return;
+        if (result.kind === "applied") {
+          setData(result.data);
+        } else if (result.kind === "no_row") {
+          await ensureRemoteRowForUser(supabase, userId, dataRef.current);
+        }
+      } finally {
+        if (!cancelled) {
+          skipRemotePushRef.current = false;
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isReady, isAuthReady, session?.user?.id]);
+
+  useEffect(() => {
+    if (!isReady || !isAuthReady) return;
+    const userId = session?.user?.id;
+    if (!userId) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
+    if (skipRemotePushRef.current) return;
+
+    const handle = setTimeout(() => {
+      void pushWaitingListForUser(supabase, userId, data);
+    }, 1500);
+
+    return () => clearTimeout(handle);
+  }, [data, isReady, isAuthReady, session?.user?.id]);
 
   const createFolder = useCallback<WaitingListContextValue["createFolder"]>((input) => {
     const timestamp = new Date().toISOString();
@@ -128,6 +188,10 @@ export const WaitingListProvider = ({ children }: { children: ReactNode }) => {
 
   return <WaitingListContext.Provider value={value}>{children}</WaitingListContext.Provider>;
 };
+
+export const WaitingListProvider = ({ children }: { children: ReactNode }) => (
+  <InnerWaitingListProvider>{children}</InnerWaitingListProvider>
+);
 
 export const useWaitingList = (): WaitingListContextValue => {
   const context = useContext(WaitingListContext);

@@ -1,5 +1,6 @@
 export type RootStackParamList = {
   Home: undefined;
+  Login: undefined;
   Folder: { folderId: string };
   AddEditFolder: { folderId?: string; parentFolderId?: string | null } | undefined;
   AddEditItem: { itemId?: string; folderId?: string } | undefined;

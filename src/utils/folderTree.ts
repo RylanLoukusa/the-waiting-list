@@ -70,7 +70,11 @@ export const canMoveFolder = (folders: Folder[], folderId: string, nextParentFol
   return nextDepth <= MAX_FOLDER_DEPTH;
 };
 
-export const deleteFolderRecursively = (folders: Folder[], items: SavedItem[], folderId: string) => {
+export const deleteFolderRecursively = (
+  folders: Folder[],
+  items: SavedItem[],
+  folderId: string,
+): { folders: Folder[]; items: SavedItem[] } => {
   const folderIdsToDelete = [folderId, ...getDescendantFolderIds(folders, folderId)];
   return {
     folders: folders.filter((folder) => !folderIdsToDelete.includes(folder.id)),

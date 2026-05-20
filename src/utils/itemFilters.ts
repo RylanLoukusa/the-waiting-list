@@ -13,9 +13,15 @@ export const pickRandomWaitingItem = (items: SavedItem[], folders: Folder[], fol
   return pool[Math.floor(Math.random() * pool.length)];
 };
 
-export const searchFoldersAndItems = (query: string, folders: Folder[], items: SavedItem[]) => {
+export const searchFoldersAndItems = (
+  query: string,
+  folders: Folder[],
+  items: SavedItem[],
+): { folders: Folder[]; items: SavedItem[] } => {
   const normalized = query.trim().toLowerCase();
-  if (!normalized) return { folders: [], items: [] };
+  if (!normalized) {
+    return { folders: [], items: [] };
+  }
 
   return {
     folders: folders.filter((folder) => folder.name.toLowerCase().includes(normalized)),

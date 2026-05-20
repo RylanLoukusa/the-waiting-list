@@ -1,0 +1,106 @@
+import React, { useCallback, useState } from "react";
+import { ScrollView, Text, View } from "react-native";
+import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { AppButton } from "../../components/AppButton";
+import { EmptyState } from "../../components/EmptyState";
+import { ItemCard } from "../../components/ItemCard";
+import { ScreenTopBar } from "../../components/ScreenTopBar";
+import { RootStackParamList } from "../../navigation/types";
+import { useWaitingList } from "../../storage/storage";
+import { SavedItem } from "../../types/models";
+import { getFolderPathLabel } from "../../utils/folderTree";
+import { pickRandomWaitingItem } from "../../utils/itemFilters";
+import { styles } from "./styles";
+
+type Props = NativeStackScreenProps<RootStackParamList, "PickSomething">;
+
+const PickedItemRow = React.memo(function PickedItemRow({
+  picked,
+  folderPath,
+  onOpenItemDetail,
+}: {
+  picked: SavedItem;
+  folderPath: string;
+  onOpenItemDetail: (itemId: string) => void;
+}) {
+  const onPress = useCallback(() => {
+    onOpenItemDetail(picked.id);
+  }, [picked.id, onOpenItemDetail]);
+
+  return <ItemCard item={picked} folderPath={folderPath} onPress={onPress} />;
+});
+
+export const PickSomethingScreen = ({ navigation, route }: Props) => {
+  const { folders, items } = useWaitingList();
+  const [folderId, setFolderId] = useState<string | undefined>(route.params?.folderId);
+  const [highPriorityOnly, setHighPriorityOnly] = useState(false);
+  const [picked, setPicked] = useState<SavedItem | undefined>(() =>
+    pickRandomWaitingItem(items, folders, route.params?.folderId, false),
+  );
+
+  const pick = useCallback((): void => {
+    setPicked(pickRandomWaitingItem(items, folders, folderId, highPriorityOnly));
+  }, [folderId, folders, highPriorityOnly, items]);
+
+  const onOpenItemDetail = useCallback(
+    (itemId: string) => {
+      navigation.navigate("ItemDetail", { itemId });
+    },
+    [navigation],
+  );
+
+  return (
+    <View style={styles.screen}>
+      <ScreenTopBar navigation={navigation} />
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        <Text style={styles.title}>Pick Something</Text>
+        <Text style={styles.subtitle}>
+          Randomly choose from waiting items. Narrow it by folder or high priority.
+        </Text>
+
+        <Text style={styles.section}>Folder</Text>
+        <Text onPress={() => setFolderId(undefined)} style={[styles.choice, !folderId && styles.selected]}>
+          All folders
+        </Text>
+        {folders.map((folder) => (
+          <Text
+            key={folder.id}
+            onPress={() => setFolderId(folder.id)}
+            style={[styles.choice, folderId === folder.id && styles.selected]}
+          >
+            {getFolderPathLabel(folders, folder.id)}
+          </Text>
+        ))}
+
+        <Text style={styles.section}>Priority</Text>
+        <Text
+          onPress={() => setHighPriorityOnly(false)}
+          style={[styles.choice, !highPriorityOnly && styles.selected]}
+        >
+          Any priority
+        </Text>
+        <Text
+          onPress={() => setHighPriorityOnly(true)}
+          style={[styles.choice, highPriorityOnly && styles.selected]}
+        >
+          High priority only
+        </Text>
+
+        <AppButton label="Pick for me" onPress={pick} style={styles.button} />
+
+        {picked ? (
+          <PickedItemRow
+            picked={picked}
+            folderPath={getFolderPathLabel(folders, picked.folderId)}
+            onOpenItemDetail={onOpenItemDetail}
+          />
+        ) : (
+          <EmptyState
+            title="Nothing waiting here."
+            message="Try a different folder or turn off high-priority filtering."
+          />
+        )}
+      </ScrollView>
+    </View>
+  );
+};
