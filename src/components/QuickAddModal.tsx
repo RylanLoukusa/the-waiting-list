@@ -3,8 +3,9 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { useWaitingList } from "../storage/storage";
 import { colors, spacing } from "../theme/theme";
 import { detectItemType, suggestFolders, suggestTags, suggestTitle } from "../utils/folderSuggestions";
-import { getFolderPathLabel } from "../utils/folderTree";
+import { getFolderHierarchyRows } from "../utils/folderTree";
 import { AppButton } from "./AppButton";
+import { FolderChoiceRow } from "./FolderChoiceRow";
 
 type Props = {
   visible: boolean;
@@ -16,6 +17,11 @@ export const QuickAddModal = ({ visible, currentFolderId, onClose }: Props) => {
   const { folders, items, createItem } = useWaitingList();
   const [content, setContent] = useState("");
   const suggestions = useMemo(() => suggestFolders(content, folders, items), [content, folders, items]);
+  const folderRows = useMemo(() => getFolderHierarchyRows(folders), [folders]);
+  const folderDepthById = useMemo(
+    () => new Map(folderRows.map((row) => [row.folder.id, row.depth])),
+    [folderRows],
+  );
   const [selectedFolderId, setSelectedFolderId] = useState<string | undefined>(currentFolderId);
   const targetFolderId = selectedFolderId ?? suggestions[0]?.folder.id ?? currentFolderId ?? folders[0]?.id;
 
@@ -71,26 +77,26 @@ export const QuickAddModal = ({ visible, currentFolderId, onClose }: Props) => {
           <Text style={styles.meta}>No confident match yet. Create a new folder or choose one below.</Text>
         ) : (
           suggestions.map((suggestion, index) => (
-            <Pressable
+            <FolderChoiceRow
               key={suggestion.folder.id}
+              folder={suggestion.folder}
+              depth={folderDepthById.get(suggestion.folder.id) ?? 0}
+              detail={suggestion.reasons.join(" · ")}
+              prefix={index === 0 ? "Best" : "Suggested"}
+              isSelected={targetFolderId === suggestion.folder.id}
               onPress={() => setSelectedFolderId(suggestion.folder.id)}
-              style={[styles.suggestion, targetFolderId === suggestion.folder.id && styles.selected]}
-            >
-              <Text style={styles.suggestionTitle}>
-                {index === 0 ? "Best: " : ""}
-                {getFolderPathLabel(folders, suggestion.folder.id)}
-              </Text>
-              <Text style={styles.meta}>{suggestion.reasons.join(" · ")}</Text>
-            </Pressable>
+            />
           ))
         )}
         <Text style={styles.section}>Or choose any folder</Text>
-        {folders.map((folder) => (
-          <Pressable key={folder.id} onPress={() => setSelectedFolderId(folder.id)}>
-            <Text style={[styles.folderChoice, targetFolderId === folder.id && styles.choiceSelected]}>
-              {getFolderPathLabel(folders, folder.id)}
-            </Text>
-          </Pressable>
+        {folderRows.map(({ folder, depth }) => (
+          <FolderChoiceRow
+            key={folder.id}
+            folder={folder}
+            depth={depth}
+            isSelected={targetFolderId === folder.id}
+            onPress={() => setSelectedFolderId(folder.id)}
+          />
         ))}
         <AppButton label="Save to Waiting List" onPress={save} style={styles.save} />
       </ScrollView>
@@ -133,15 +139,5 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
     marginTop: spacing.lg,
   },
-  suggestion: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    marginVertical: spacing.xs,
-    padding: spacing.md,
-  },
-  selected: { borderColor: colors.accent, borderWidth: 2 },
-  suggestionTitle: { color: colors.ink, fontWeight: "800" },
-  folderChoice: { color: colors.muted, paddingVertical: spacing.sm },
-  choiceSelected: { color: colors.accentDark, fontWeight: "900" },
   save: { marginTop: spacing.lg },
 });

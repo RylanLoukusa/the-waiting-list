@@ -2,10 +2,38 @@ import { Folder, SavedItem } from "../types/models";
 
 export const MAX_FOLDER_DEPTH = 5;
 
+export type FolderHierarchyRow = {
+  folder: Folder;
+  depth: number;
+};
+
 export const getChildFolders = (folders: Folder[], parentFolderId: string | null): Folder[] =>
   folders
     .filter((folder) => folder.parentFolderId === parentFolderId)
     .sort((a, b) => a.name.localeCompare(b.name));
+
+export const getFolderHierarchyRows = (folders: Folder[]): FolderHierarchyRow[] => {
+  const rows: FolderHierarchyRow[] = [];
+  const seen = new Set<string>();
+
+  const visit = (parentFolderId: string | null, depth: number): void => {
+    getChildFolders(folders, parentFolderId).forEach((folder) => {
+      if (seen.has(folder.id)) return;
+      seen.add(folder.id);
+      rows.push({ folder, depth });
+      visit(folder.id, depth + 1);
+    });
+  };
+
+  visit(null, 0);
+
+  folders
+    .filter((folder) => !seen.has(folder.id))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .forEach((folder) => rows.push({ folder, depth: 0 }));
+
+  return rows;
+};
 
 export const getItemsInFolder = (items: SavedItem[], folderId: string): SavedItem[] =>
   items.filter((item) => item.folderId === folderId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));

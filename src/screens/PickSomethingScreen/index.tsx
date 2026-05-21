@@ -1,18 +1,25 @@
-import React, { useCallback, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import React, { useCallback, useMemo, useState } from "react";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
 import { EmptyState } from "../../components/EmptyState";
+import { FolderChoiceRow } from "../../components/FolderChoiceRow";
 import { ItemCard } from "../../components/ItemCard";
+import { OptionChoiceRow } from "../../components/OptionChoiceRow";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { RootStackParamList } from "../../navigation/types";
 import { useWaitingList } from "../../storage/storage";
 import { SavedItem } from "../../types/models";
-import { getFolderPathLabel } from "../../utils/folderTree";
+import { getFolderHierarchyRows, getFolderPathLabel } from "../../utils/folderTree";
 import { pickRandomWaitingItem } from "../../utils/itemFilters";
 import { styles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "PickSomething">;
+
+const priorityFilterChoices = [
+  { value: false, label: "Any priority", detail: "Pull from everything waiting", tone: "#6E8F72" },
+  { value: true, label: "High priority only", detail: "Only pick from top-priority saves", tone: "#B85B53" },
+];
 
 const PickedItemRow = React.memo(function PickedItemRow({
   picked,
@@ -37,6 +44,7 @@ export const PickSomethingScreen = ({ navigation, route }: Props) => {
   const [picked, setPicked] = useState<SavedItem | undefined>(() =>
     pickRandomWaitingItem(items, folders, route.params?.folderId, false),
   );
+  const folderRows = useMemo(() => getFolderHierarchyRows(folders), [folders]);
 
   const pick = useCallback((): void => {
     setPicked(pickRandomWaitingItem(items, folders, folderId, highPriorityOnly));
@@ -59,32 +67,33 @@ export const PickSomethingScreen = ({ navigation, route }: Props) => {
         </Text>
 
         <Text style={styles.section}>Folder</Text>
-        <Text onPress={() => setFolderId(undefined)} style={[styles.choice, !folderId && styles.selected]}>
-          All folders
-        </Text>
-        {folders.map((folder) => (
-          <Text
+        <Pressable
+          onPress={() => setFolderId(undefined)}
+          style={[styles.anyFolderChoice, !folderId && styles.anyFolderSelected]}
+        >
+          <Text style={[styles.anyFolderText, !folderId && styles.anyFolderTextSelected]}>All folders</Text>
+        </Pressable>
+        {folderRows.map(({ folder, depth }) => (
+          <FolderChoiceRow
             key={folder.id}
+            folder={folder}
+            depth={depth}
+            isSelected={folderId === folder.id}
             onPress={() => setFolderId(folder.id)}
-            style={[styles.choice, folderId === folder.id && styles.selected]}
-          >
-            {getFolderPathLabel(folders, folder.id)}
-          </Text>
+          />
         ))}
 
         <Text style={styles.section}>Priority</Text>
-        <Text
-          onPress={() => setHighPriorityOnly(false)}
-          style={[styles.choice, !highPriorityOnly && styles.selected]}
-        >
-          Any priority
-        </Text>
-        <Text
-          onPress={() => setHighPriorityOnly(true)}
-          style={[styles.choice, highPriorityOnly && styles.selected]}
-        >
-          High priority only
-        </Text>
+        {priorityFilterChoices.map((choice) => (
+          <OptionChoiceRow
+            key={choice.label}
+            label={choice.label}
+            detail={choice.detail}
+            tone={choice.tone}
+            isSelected={highPriorityOnly === choice.value}
+            onPress={() => setHighPriorityOnly(choice.value)}
+          />
+        ))}
 
         <AppButton label="Pick for me" onPress={pick} style={styles.button} />
 

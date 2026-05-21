@@ -42,14 +42,6 @@ export const styles = StyleSheet.create({
     fontWeight: "900",
     marginTop: spacing.lg,
   },
-  choice: {
-    color: colors.muted,
-    paddingVertical: spacing.sm,
-  },
-  selected: {
-    color: colors.accentDark,
-    fontWeight: "900",
-  },
   button: {
     marginTop: spacing.lg,
   },

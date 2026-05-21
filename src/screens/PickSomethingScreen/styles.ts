@@ -30,13 +30,28 @@ export const styles = StyleSheet.create({
     fontWeight: "900",
     marginTop: spacing.lg,
   },
-  choice: {
-    color: colors.muted,
+  anyFolderChoice: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: spacing.xs,
+    minHeight: 54,
+    justifyContent: "center",
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
-  selected: {
+  anyFolderSelected: {
+    borderColor: colors.accent,
+    borderWidth: 2,
+  },
+  anyFolderText: {
+    color: colors.ink,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  anyFolderTextSelected: {
     color: colors.accentDark,
-    fontWeight: "900",
   },
   button: {
     marginVertical: spacing.lg,

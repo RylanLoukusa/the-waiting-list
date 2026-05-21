@@ -2,14 +2,16 @@ import React, { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
+import { FolderChoiceRow } from "../../components/FolderChoiceRow";
 import { MediaPicker } from "../../components/MediaPicker";
+import { OptionChoiceRow } from "../../components/OptionChoiceRow";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { RootStackParamList } from "../../navigation/types";
 import { uploadMediaToSupabase } from "../../lib/supabaseStorage";
 import { useWaitingList } from "../../storage/storage";
 import { ItemPriority, ItemStatus, ItemType } from "../../types/models";
 import { detectItemType, suggestFolders, suggestTags, suggestTitle } from "../../utils/folderSuggestions";
-import { getFolderPathLabel } from "../../utils/folderTree";
+import { getFolderHierarchyRows } from "../../utils/folderTree";
 import { styles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddEditItem">;
@@ -17,6 +19,26 @@ type Props = NativeStackScreenProps<RootStackParamList, "AddEditItem">;
 const types: ItemType[] = ["text", "link", "image", "video"];
 const statuses: ItemStatus[] = ["waiting", "planned", "done", "skipped"];
 const priorities: ItemPriority[] = ["low", "medium", "high"];
+
+const typeChoices: Record<ItemType, { label: string; detail: string; tone: string }> = {
+  text: { label: "Text", detail: "Notes, ideas, reminders", tone: "#8A9A5B" },
+  link: { label: "Link", detail: "Articles, products, places", tone: "#6F8FAF" },
+  image: { label: "Image", detail: "Photos and visual references", tone: "#B9856D" },
+  video: { label: "Video", detail: "Clips, reels, and watch-later saves", tone: "#9B7BB5" },
+};
+
+const statusChoices: Record<ItemStatus, { label: string; detail: string; tone: string }> = {
+  waiting: { label: "Waiting", detail: "Saved for later", tone: "#DFAE73" },
+  planned: { label: "Planned", detail: "Chosen and queued up", tone: "#6F8FAF" },
+  done: { label: "Done", detail: "Finished or visited", tone: "#6E8F72" },
+  skipped: { label: "Skipped", detail: "Not for now", tone: "#B85B53" },
+};
+
+const priorityChoices: Record<ItemPriority, { label: string; detail: string; tone: string }> = {
+  low: { label: "Low", detail: "Nice to have", tone: "#8AA8A1" },
+  medium: { label: "Medium", detail: "Worth keeping in rotation", tone: "#DFAE73" },
+  high: { label: "High", detail: "Top of the list", tone: "#B85B53" },
+};
 
 export const AddEditItemScreen = ({ navigation, route }: Props) => {
   const { folders, items, createItem, updateItem } = useWaitingList();
@@ -35,6 +57,11 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
     editing?.type === "image" ? "image" : editing?.type === "video" ? "video" : undefined
   );
   const [isSaving, setIsSaving] = useState(false);
+  const folderRows = useMemo(() => getFolderHierarchyRows(folders), [folders]);
+  const folderDepthById = useMemo(
+    () => new Map(folderRows.map((row) => [row.folder.id, row.depth])),
+    [folderRows],
+  );
 
   const applySuggestion = useCallback((): void => {
     setTitle(suggestTitle(content));
@@ -125,11 +152,19 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
         <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder={suggestTitle(content)} />
 
         <Text style={styles.section}>Type</Text>
-        {types.map((choice) => (
-          <Text key={choice} onPress={() => setType(choice)} style={[styles.choice, type === choice && styles.selected]}>
-            {choice}
-          </Text>
-        ))}
+        {types.map((choice) => {
+          const option = typeChoices[choice];
+          return (
+            <OptionChoiceRow
+              key={choice}
+              label={option.label}
+              detail={option.detail}
+              tone={option.tone}
+              isSelected={type === choice}
+              onPress={() => setType(choice)}
+            />
+          );
+        })}
 
         {(type === "image" || type === "video") && (
           <MediaPicker onMediaSelected={handleMediaSelected} initialUri={selectedMediaUri} style={styles.button} />
@@ -137,22 +172,23 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
 
         <Text style={styles.section}>Folder</Text>
         {suggestions.map((suggestion) => (
-          <Text
+          <FolderChoiceRow
             key={suggestion.folder.id}
+            folder={suggestion.folder}
+            depth={folderDepthById.get(suggestion.folder.id) ?? 0}
+            prefix="Suggested"
+            isSelected={folderId === suggestion.folder.id}
             onPress={() => setFolderId(suggestion.folder.id)}
-            style={[styles.choice, folderId === suggestion.folder.id && styles.selected]}
-          >
-            Suggested: {getFolderPathLabel(folders, suggestion.folder.id)}
-          </Text>
+          />
         ))}
-        {folders.map((folder) => (
-          <Text
+        {folderRows.map(({ folder, depth }) => (
+          <FolderChoiceRow
             key={folder.id}
+            folder={folder}
+            depth={depth}
+            isSelected={folderId === folder.id}
             onPress={() => setFolderId(folder.id)}
-            style={[styles.choice, folderId === folder.id && styles.selected]}
-          >
-            {getFolderPathLabel(folders, folder.id)}
-          </Text>
+          />
         ))}
 
         <Text style={styles.label}>Tags</Text>
@@ -164,26 +200,34 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
         />
 
         <Text style={styles.section}>Status</Text>
-        {statuses.map((choice) => (
-          <Text
-            key={choice}
-            onPress={() => setStatus(choice)}
-            style={[styles.choice, status === choice && styles.selected]}
-          >
-            {choice}
-          </Text>
-        ))}
+        {statuses.map((choice) => {
+          const option = statusChoices[choice];
+          return (
+            <OptionChoiceRow
+              key={choice}
+              label={option.label}
+              detail={option.detail}
+              tone={option.tone}
+              isSelected={status === choice}
+              onPress={() => setStatus(choice)}
+            />
+          );
+        })}
 
         <Text style={styles.section}>Priority</Text>
-        {priorities.map((choice) => (
-          <Text
-            key={choice}
-            onPress={() => setPriority(choice)}
-            style={[styles.choice, priority === choice && styles.selected]}
-          >
-            {choice}
-          </Text>
-        ))}
+        {priorities.map((choice) => {
+          const option = priorityChoices[choice];
+          return (
+            <OptionChoiceRow
+              key={choice}
+              label={option.label}
+              detail={option.detail}
+              tone={option.tone}
+              isSelected={priority === choice}
+              onPress={() => setPriority(choice)}
+            />
+          );
+        })}
 
         <AppButton label={isSaving ? "Saving..." : "Save item"} onPress={save} disabled={isSaving} style={styles.button} />
         {isSaving && <ActivityIndicator size="large" style={styles.button} />}

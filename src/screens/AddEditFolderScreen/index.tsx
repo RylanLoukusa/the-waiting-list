@@ -1,14 +1,37 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { Alert, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
+import { FolderChoiceRow } from "../../components/FolderChoiceRow";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { RootStackParamList } from "../../navigation/types";
 import { useWaitingList } from "../../storage/storage";
-import { canAddChildFolder, canMoveFolder, getFolderById, getFolderPathLabel } from "../../utils/folderTree";
+import { canAddChildFolder, canMoveFolder, getChildFolders, getFolderById, getFolderHierarchyRows, getFolderPath, getFolderPathLabel } from "../../utils/folderTree";
 import { styles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddEditFolder">;
+
+const FOLDER_COLORS = [
+  "#D98A8A",
+  "#F0A66A",
+  "#F3B562",
+  "#E4C45E",
+  "#D8C7AA",
+  "#7EBEA6",
+  "#8AC9A7",
+  "#7FB7AE",
+  "#8AA8D8",
+  "#92A8D1",
+  "#A48AD8",
+  "#B399D8",
+];
+
+const isSingleEmoji = (value: string): boolean => {
+  const trimmed = value.trim();
+  return /^(?:\p{Extended_Pictographic}\uFE0F?)(?:\u200D\p{Extended_Pictographic}\uFE0F?)*$/u.test(trimmed);
+};
+
+const normalizeFolderIcon = (value: string): string => (isSingleEmoji(value) ? value.trim() : "📁");
 
 export const AddEditFolderScreen = ({ navigation, route }: Props) => {
   const { folders, createFolder, updateFolder } = useWaitingList();
@@ -20,6 +43,9 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
   const [parentFolderId, setParentFolderId] = useState<string | null>(
     editing?.parentFolderId ?? route.params?.parentFolderId ?? null,
   );
+  const [parentPickerOpen, setParentPickerOpen] = useState(false);
+  const [parentSearch, setParentSearch] = useState("");
+  const [expandedParentFolderIds, setExpandedParentFolderIds] = useState<Set<string>>(new Set());
 
   const parentChoices = useMemo(
     () =>
@@ -28,8 +54,68 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
         : folders.filter((folder) => canAddChildFolder(folders, folder.id)),
     [editing, folders],
   );
+  const parentChoiceIds = useMemo(() => new Set(parentChoices.map((folder) => folder.id)), [parentChoices]);
+  const parentRows = useMemo(
+    () => getFolderHierarchyRows(folders).filter((row) => parentChoiceIds.has(row.folder.id)),
+    [folders, parentChoiceIds],
+  );
+  const searchedParentRows = useMemo(() => {
+    const query = parentSearch.trim().toLowerCase();
+    if (!query) return [];
+
+    return parentRows.filter(({ folder }) => getFolderPathLabel(folders, folder.id).toLowerCase().includes(query));
+  }, [folders, parentRows, parentSearch]);
+  const browsedParentRows = useMemo(() => {
+    const rows: typeof parentRows = [];
+
+    const visit = (parentId: string | null, depth: number): void => {
+      getChildFolders(folders, parentId)
+        .filter((folder) => parentChoiceIds.has(folder.id))
+        .forEach((folder) => {
+          rows.push({ folder, depth });
+          if (expandedParentFolderIds.has(folder.id)) {
+            visit(folder.id, depth + 1);
+          }
+        });
+    };
+
+    visit(null, 0);
+    return rows;
+  }, [expandedParentFolderIds, folders, parentChoiceIds]);
+  const displayedParentRows = parentSearch.trim().length > 0 ? searchedParentRows : browsedParentRows;
+  const selectedParentFolder = getFolderById(folders, parentFolderId);
+
+  const openParentPicker = useCallback((): void => {
+    setExpandedParentFolderIds(new Set(getFolderPath(folders, parentFolderId).map((folder) => folder.id)));
+    setParentPickerOpen(true);
+  }, [folders, parentFolderId]);
+
+  const closeParentPicker = useCallback((): void => {
+    setParentPickerOpen(false);
+    setParentSearch("");
+  }, []);
+
+  const chooseParentFolder = useCallback((nextParentFolderId: string | null): void => {
+    setParentFolderId(nextParentFolderId);
+    setParentSearch("");
+    if (nextParentFolderId) {
+      setExpandedParentFolderIds((current) => {
+        const next = new Set(current);
+        if (next.has(nextParentFolderId)) {
+          next.delete(nextParentFolderId);
+          return next;
+        }
+        getFolderPath(folders, nextParentFolderId).forEach((folder) => next.add(folder.id));
+        return next;
+      });
+      return;
+    }
+    setExpandedParentFolderIds(new Set());
+  }, [folders]);
 
   const save = useCallback((): void => {
+    const normalizedIcon = normalizeFolderIcon(icon);
+
     if (editing) {
       if (!canMoveFolder(folders, editing.id, parentFolderId)) {
         Alert.alert(
@@ -38,7 +124,7 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
         );
         return;
       }
-      updateFolder(editing.id, { name, icon, color, parentFolderId });
+      updateFolder(editing.id, { name, icon: normalizedIcon, color, parentFolderId });
       navigation.goBack();
       return;
     }
@@ -46,7 +132,7 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
       Alert.alert("Max depth reached", "Folders can be nested up to 5 levels deep.");
       return;
     }
-    const folder = createFolder({ name, icon, color, parentFolderId });
+    const folder = createFolder({ name, icon: normalizedIcon, color, parentFolderId });
     navigation.replace("Folder", { folderId: folder.id });
   }, [color, createFolder, editing, folders, icon, name, navigation, parentFolderId, updateFolder]);
 
@@ -60,30 +146,116 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
         <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Weekend Ideas" />
 
         <Text style={styles.label}>Icon</Text>
-        <TextInput style={styles.input} value={icon} onChangeText={setIcon} />
+        <TextInput
+          autoCorrect={false}
+          maxLength={8}
+          onBlur={() => setIcon((current) => normalizeFolderIcon(current))}
+          onChangeText={setIcon}
+          placeholder="📁"
+          style={[styles.input, styles.iconInput, !isSingleEmoji(icon) && styles.inputWarning]}
+          value={icon}
+        />
+        {!isSingleEmoji(icon) && <Text style={styles.helpText}>Use one emoji. Invalid icons save as 📁.</Text>}
 
         <Text style={styles.label}>Color</Text>
-        <TextInput style={styles.input} value={color} onChangeText={setColor} />
+        <View style={styles.colorGrid}>
+          {FOLDER_COLORS.map((option) => {
+            const isSelected = color === option;
+
+            return (
+              <Pressable
+                key={option}
+                accessibilityLabel={`Use folder color ${option}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSelected }}
+                onPress={() => setColor(option)}
+                style={({ pressed }) => [
+                  styles.colorSwatch,
+                  { backgroundColor: option },
+                  isSelected && styles.colorTileSelected,
+                  pressed && styles.colorTilePressed,
+                ]}
+              >
+                {isSelected && <Text style={styles.colorCheck}>✓</Text>}
+              </Pressable>
+            );
+          })}
+        </View>
 
         <Text style={styles.section}>Parent folder</Text>
-        <Text
-          onPress={() => setParentFolderId(null)}
-          style={[styles.choice, parentFolderId === null && styles.selected]}
+        <Pressable
+          onPress={openParentPicker}
+          style={({ pressed }) => [
+            styles.parentSummary,
+            pressed && styles.parentSummaryPressed,
+          ]}
         >
-          Home
-        </Text>
-        {parentChoices.map((folder) => (
-          <Text
-            key={folder.id}
-            onPress={() => setParentFolderId(folder.id)}
-            style={[styles.choice, parentFolderId === folder.id && styles.selected]}
-          >
-            {getFolderPathLabel(folders, folder.id)}
-          </Text>
-        ))}
+          <View style={[styles.parentSummaryIcon, selectedParentFolder?.color ? { backgroundColor: selectedParentFolder.color } : undefined]}>
+            <Text style={styles.parentSummaryIconText}>{selectedParentFolder?.icon ?? "⌂"}</Text>
+          </View>
+          <View style={styles.parentSummaryCopy}>
+            <Text style={styles.parentSummaryTitle}>{selectedParentFolder?.name ?? "Home"}</Text>
+            <Text style={styles.parentSummaryMeta}>
+              {selectedParentFolder ? getFolderPathLabel(folders, selectedParentFolder.id) : "Top-level folder"}
+            </Text>
+          </View>
+          <Text style={styles.parentSummaryAction}>Change</Text>
+        </Pressable>
 
         <AppButton label="Save folder" onPress={save} style={styles.save} />
       </ScrollView>
+
+      <Modal animationType="slide" visible={parentPickerOpen} presentationStyle="pageSheet" onRequestClose={closeParentPicker}>
+        <ScrollView style={styles.modalScreen} contentContainerStyle={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Parent folder</Text>
+            <Pressable onPress={closeParentPicker}>
+              <Text style={styles.modalClose}>Done</Text>
+            </Pressable>
+          </View>
+
+          <TextInput
+            autoCorrect={false}
+            onChangeText={setParentSearch}
+            placeholder="Search folders..."
+            style={styles.input}
+            value={parentSearch}
+          />
+
+          <Pressable
+            onPress={() => chooseParentFolder(null)}
+            style={({ pressed }) => [
+              styles.homeChoice,
+              parentFolderId === null && styles.homeChoiceSelected,
+              pressed && styles.homeChoicePressed,
+            ]}
+          >
+            <View style={styles.homeIcon}>
+              <Text style={styles.homeIconText}>⌂</Text>
+            </View>
+            <View style={styles.homeCopy}>
+              <Text style={[styles.homeTitle, parentFolderId === null && styles.homeTitleSelected]}>Home</Text>
+              <Text style={styles.homeMeta}>Top-level folder</Text>
+            </View>
+            {parentFolderId === null && <Text style={styles.homeCheck}>✓</Text>}
+          </Pressable>
+
+          <Text style={styles.modalSection}>{parentSearch.trim() ? "Matching folders" : "Browse folders"}</Text>
+          {displayedParentRows.length === 0 ? (
+            <Text style={styles.emptyPickerText}>No valid parent folders found.</Text>
+          ) : (
+            displayedParentRows.map(({ folder, depth }) => (
+              <FolderChoiceRow
+                key={folder.id}
+                folder={folder}
+                depth={depth}
+                isSelected={parentFolderId === folder.id}
+                onPress={() => chooseParentFolder(folder.id)}
+              />
+            ))
+          )}
+        </ScrollView>
+      </Modal>
     </View>
   );
 };
