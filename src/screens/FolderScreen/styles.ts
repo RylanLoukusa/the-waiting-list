@@ -22,6 +22,7 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
+    gap: spacing.md,
   },
   title: {
     color: colors.ink,
@@ -29,8 +30,20 @@ export const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: "900",
   },
-  link: {
+  moreButton: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  moreButtonPressed: {
+    opacity: 0.72,
+  },
+  moreButtonText: {
     color: colors.accentDark,
+    fontSize: 14,
     fontWeight: "900",
   },
   actions: {
@@ -47,5 +60,26 @@ export const styles = StyleSheet.create({
     fontWeight: "900",
     marginTop: spacing.lg,
     marginBottom: spacing.xs,
+  },
+  showAllSubfolders: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: spacing.xs,
+    minHeight: 48,
+    justifyContent: "center",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  showAllSubfoldersPressed: {
+    opacity: 0.72,
+    transform: [{ scale: 0.99 }],
+  },
+  showAllSubfoldersText: {
+    color: colors.accentDark,
+    fontSize: 14,
+    fontWeight: "900",
   },
 });

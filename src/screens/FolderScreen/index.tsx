@@ -1,17 +1,17 @@
 import React, { useCallback, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, Share, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
 import { EmptyState } from "../../components/EmptyState";
 import { FolderCard } from "../../components/FolderCard";
 import { ItemCard } from "../../components/ItemCard";
-import { QuickAddModal } from "../../components/QuickAddModal";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { RootStackParamList } from "../../navigation/types";
 import { useWaitingList } from "../../storage/storage";
 import { Folder, SavedItem } from "../../types/models";
 import { canAddChildFolder, getChildFolders, getFolderById, getFolderPath, getItemsInFolder } from "../../utils/folderTree";
+import { pickRandomWaitingItem } from "../../utils/itemFilters";
 import { styles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Folder">;
@@ -45,17 +45,9 @@ const FolderItemRow = React.memo(function FolderItemRow({ item, onOpenItemDetail
 
 export const FolderScreen = ({ navigation, route }: Props) => {
   const { folders, items, deleteFolder } = useWaitingList();
-  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [showAllSubfolders, setShowAllSubfolders] = useState(false);
 
   const folder = getFolderById(folders, route.params.folderId);
-
-  const onCloseQuickAdd = useCallback(() => {
-    setQuickAddOpen(false);
-  }, []);
-
-  const onPressQuickAdd = useCallback(() => {
-    setQuickAddOpen(true);
-  }, []);
 
   const onBreadcrumbHome = useCallback(() => {
     navigation.navigate("Home");
@@ -94,6 +86,8 @@ export const FolderScreen = ({ navigation, route }: Props) => {
   }
 
   const subfolders = getChildFolders(folders, folder.id);
+  const visibleSubfolders = showAllSubfolders ? subfolders : subfolders.slice(0, 3);
+  const hiddenSubfolderCount = subfolders.length - visibleSubfolders.length;
   const folderItems = getItemsInFolder(items, folder.id);
   const canNestMore = canAddChildFolder(folders, folder.id);
 
@@ -110,6 +104,27 @@ export const FolderScreen = ({ navigation, route }: Props) => {
       navigation.navigate("AddEditFolder", { parentFolderId: folder.id });
     }
   }, [canNestMore, navigation, folder.id]);
+
+  const onPressPickSomething = useCallback(() => {
+    const picked = pickRandomWaitingItem(items, folders, folder.id);
+    if (!picked) {
+      Alert.alert("Nothing waiting here", "This folder does not have any waiting items to pick from.");
+      return;
+    }
+    navigation.navigate("ItemDetail", { itemId: picked.id });
+  }, [folder.id, folders, items, navigation]);
+
+  const onPressShare = useCallback(async (): Promise<void> => {
+    const itemLines = folderItems.map((item) => `- ${item.title}`);
+    const subfolderLines = subfolders.map((child) => `- ${child.icon ?? "📁"} ${child.name}`);
+    const sections = [
+      `${folder.icon ?? "📁"} ${folder.name}`,
+      subfolderLines.length ? `Subfolders:\n${subfolderLines.join("\n")}` : "",
+      itemLines.length ? `Items:\n${itemLines.join("\n")}` : "",
+    ].filter(Boolean);
+
+    await Share.share({ message: sections.join("\n\n") });
+  }, [folder.icon, folder.name, folderItems, subfolders]);
 
   const confirmDelete = useCallback((): void => {
     Alert.alert(
@@ -129,6 +144,16 @@ export const FolderScreen = ({ navigation, route }: Props) => {
     );
   }, [deleteFolder, folder.id, navigation]);
 
+  const onOpenMenu = useCallback((): void => {
+    Alert.alert("Folder actions", folder.name, [
+      { text: "Edit", onPress: onPressEditFolder },
+      { text: "Pick Something", onPress: onPressPickSomething },
+      { text: "Share", onPress: () => void onPressShare() },
+      { text: "Delete folder", style: "destructive", onPress: confirmDelete },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }, [confirmDelete, folder.name, onPressEditFolder, onPressPickSomething, onPressShare]);
+
   return (
     <View style={styles.screen}>
       <ScreenTopBar navigation={navigation} />
@@ -143,38 +168,46 @@ export const FolderScreen = ({ navigation, route }: Props) => {
           <Text style={styles.title}>
             {folder.icon} {folder.name}
           </Text>
-          <Pressable onPress={onPressEditFolder}>
-            <Text style={styles.link}>Edit</Text>
+          <Pressable onPress={onOpenMenu} style={({ pressed }) => [styles.moreButton, pressed && styles.moreButtonPressed]}>
+            <Text style={styles.moreButtonText}>More</Text>
           </Pressable>
         </View>
 
         <View style={styles.actions}>
           <AppButton label="Add item" onPress={onPressAddItem} style={styles.action} />
-          <AppButton label="Quick Add" variant="secondary" onPress={onPressQuickAdd} style={styles.action} />
-        </View>
-
-        <View style={styles.actions}>
           <AppButton
             label={canNestMore ? "Add subfolder" : "Max depth reached"}
             variant="secondary"
             onPress={onPressAddSubfolder}
             style={styles.action}
+            disabled={!canNestMore}
           />
-          <AppButton label="Delete" variant="danger" onPress={confirmDelete} style={styles.action} />
         </View>
 
         <Text style={styles.section}>Subfolders</Text>
         {subfolders.length === 0 ? (
           <EmptyState title="No subfolders yet." message="Create a subfolder to organize this list." />
         ) : (
-          subfolders.map((child) => (
-            <SubfolderRow
-              key={child.id}
-              child={child}
-              count={items.filter((item) => item.folderId === child.id).length}
-              onOpenFolder={onOpenFolder}
-            />
-          ))
+          <>
+            {visibleSubfolders.map((child) => (
+              <SubfolderRow
+                key={child.id}
+                child={child}
+                count={items.filter((item) => item.folderId === child.id).length}
+                onOpenFolder={onOpenFolder}
+              />
+            ))}
+            {subfolders.length > 3 && (
+              <Pressable
+                onPress={() => setShowAllSubfolders((current) => !current)}
+                style={({ pressed }) => [styles.showAllSubfolders, pressed && styles.showAllSubfoldersPressed]}
+              >
+                <Text style={styles.showAllSubfoldersText}>
+                  {showAllSubfolders ? "Show fewer subfolders" : `Show all subfolders (${hiddenSubfolderCount} more)`}
+                </Text>
+              </Pressable>
+            )}
+          </>
         )}
 
         <Text style={styles.section}>Items</Text>
@@ -186,8 +219,6 @@ export const FolderScreen = ({ navigation, route }: Props) => {
         ) : (
           folderItems.map((item) => <FolderItemRow key={item.id} item={item} onOpenItemDetail={onOpenItemDetail} />)
         )}
-
-        <QuickAddModal visible={quickAddOpen} currentFolderId={folder.id} onClose={onCloseQuickAdd} />
       </ScrollView>
     </View>
   );

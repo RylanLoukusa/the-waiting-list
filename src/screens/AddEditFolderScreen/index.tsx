@@ -245,13 +245,13 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
             <Text style={styles.emptyPickerText}>No valid parent folders found.</Text>
           ) : (
             displayedParentRows.map(({ folder, depth }) => (
-              <FolderChoiceRow
-                key={folder.id}
-                folder={folder}
-                depth={depth}
-                isSelected={parentFolderId === folder.id}
-                onPress={() => chooseParentFolder(folder.id)}
-              />
+                <FolderChoiceRow
+                  key={folder.id}
+                  folder={folder}
+                  depth={depth}
+                  isSelected={parentFolderId === folder.id}
+                  onPress={() => chooseParentFolder(folder.id)}
+                />
             ))
           )}
         </ScrollView>
