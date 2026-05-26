@@ -13,8 +13,8 @@ const STORAGE_KEY = "the-waiting-list:data:v1";
 
 type WaitingListContextValue = WaitingListData & {
   isReady: boolean;
-  createFolder: (input: Pick<Folder, "name" | "parentFolderId"> & Partial<Pick<Folder, "icon" | "color">>) => Folder;
-  updateFolder: (folderId: string, updates: Partial<Pick<Folder, "name" | "parentFolderId" | "icon" | "color">>) => boolean;
+  createFolder: (input: Pick<Folder, "name" | "parentFolderId"> & Partial<Pick<Folder, "icon" | "color" | "purpose">>) => Folder;
+  updateFolder: (folderId: string, updates: Partial<Pick<Folder, "name" | "parentFolderId" | "icon" | "color" | "purpose">>) => boolean;
   deleteFolder: (folderId: string) => void;
   createItem: (input: Omit<SavedItem, "id" | "createdAt" | "updatedAt">) => SavedItem;
   updateItem: (itemId: string, updates: Partial<Omit<SavedItem, "id" | "createdAt">>) => void;
@@ -23,6 +23,11 @@ type WaitingListContextValue = WaitingListData & {
 };
 
 const WaitingListContext = createContext<WaitingListContextValue | undefined>(undefined);
+
+const cleanOptionalText = (value?: string): string | undefined => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+};
 
 export const loadWaitingListData = async (): Promise<WaitingListData> => {
   const stored = await AsyncStorage.getItem(STORAGE_KEY);
@@ -119,6 +124,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
       parentFolderId: input.parentFolderId,
       icon: input.icon || "📁",
       color: input.color || "#D8C7AA",
+      purpose: cleanOptionalText(input.purpose),
       createdAt: timestamp,
       updatedAt: timestamp,
     };
@@ -136,11 +142,16 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
       didUpdate = true;
       return {
         ...current,
-        folders: current.folders.map((folder) =>
-          folder.id === folderId
-            ? { ...folder, ...updates, name: updates.name?.trim() || folder.name, updatedAt: new Date().toISOString() }
-            : folder,
-        ),
+        folders: current.folders.map((folder) => {
+          if (folder.id !== folderId) return folder;
+          return {
+            ...folder,
+            ...updates,
+            name: updates.name?.trim() || folder.name,
+            purpose: updates.purpose !== undefined ? cleanOptionalText(updates.purpose) : folder.purpose,
+            updatedAt: new Date().toISOString(),
+          };
+        }),
       };
     });
     return didUpdate;

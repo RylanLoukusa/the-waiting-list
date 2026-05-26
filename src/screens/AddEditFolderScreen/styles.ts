@@ -32,6 +32,10 @@ export const styles = StyleSheet.create({
     color: colors.ink,
     padding: spacing.md,
   },
+  purposeInput: {
+    lineHeight: 20,
+    minHeight: 92,
+  },
   iconInput: {
     fontSize: 24,
     minHeight: 56,

@@ -2,18 +2,19 @@ import { Folder, SavedItem, WaitingListData } from "../types/models";
 
 const now = "2026-05-15T00:00:00.000Z";
 
-const folder = (id: string, name: string, parentFolderId: string | null, icon: string, color: string): Folder => ({
+const folder = (id: string, name: string, parentFolderId: string | null, icon: string, color: string, purpose?: string): Folder => ({
   id,
   name,
   parentFolderId,
   icon,
   color,
+  purpose,
   createdAt: now,
   updatedAt: now,
 });
 
 export const seedFolders: Folder[] = [
-  folder("food", "Food", null, "🍽️", "#F3B562"),
+  folder("food", "Food", null, "🍽️", "#F3B562", "Places to eat, recipes to try, and food ideas worth keeping close."),
   folder("food-cooking", "Cooking", "food", "🍳", "#F7C978"),
   folder("food-eating-out", "Eating Out", "food", "🍜", "#F0A66A"),
   folder("food-fast-food", "Fast Food", "food-eating-out", "🍔", "#EFA06A"),
@@ -28,8 +29,8 @@ export const seedFolders: Folder[] = [
   folder("places", "Places", null, "📍", "#7EBEA6"),
   folder("places-travel", "Travel", "places", "✈️", "#7FB7AE"),
   folder("places-local", "Local", "places", "🌿", "#8AC9A7"),
-  folder("things-to-buy", "Things To Buy", null, "🛍️", "#D98A8A"),
-  folder("weekend-ideas", "Weekend Ideas", null, "☀️", "#E4C45E"),
+  folder("things-to-buy", "Things To Buy", null, "🛍️", "#D98A8A", "A buffer for purchases before they turn into decisions."),
+  folder("weekend-ideas", "Weekend Ideas", null, "☀️", "#E4C45E", "Low-pressure options for free Saturdays, loose plans, and local wandering."),
 ];
 
 const item = (

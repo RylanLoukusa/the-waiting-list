@@ -5,6 +5,7 @@ import { colors, spacing } from "../theme/theme";
 
 const typeIcon: Record<ItemType, string> = {
   text: "📝",
+  list: "☑️",
   link: "🔗",
   image: "🖼️",
   video: "🎥",
@@ -30,6 +31,20 @@ export const ItemCard = ({ item, folderPath, onPress }: Props) => (
           {item.description}
         </Text>
       )}
+      {item.type === "list" && !!item.listItems?.length && (
+        <View style={styles.previewBlock}>
+          {item.listItems.slice(0, 3).map((listItem) => (
+            <Text key={listItem.id} numberOfLines={1} style={styles.previewLine}>
+              {listItem.kind === "check" ? (listItem.checked ? "☑" : "☐") : "•"} {listItem.text || "Untitled row"}
+            </Text>
+          ))}
+        </View>
+      )}
+      {!!item.attachments?.length && (
+        <Text style={styles.attachmentMeta}>
+          {item.attachments.length} attachment{item.attachments.length === 1 ? "" : "s"}
+        </Text>
+      )}
       <View style={styles.row}>
         <Text style={styles.pill}>{item.status}</Text>
         <Text style={[styles.pill, item.priority === "high" && styles.high]}>{item.priority}</Text>
@@ -51,6 +66,9 @@ const styles = StyleSheet.create({
   title: { color: colors.ink, fontSize: 16, fontWeight: "800" },
   path: { color: colors.accentDark, fontSize: 12, marginTop: 2 },
   description: { color: colors.muted, fontSize: 13, marginTop: spacing.xs },
+  previewBlock: { marginTop: spacing.xs },
+  previewLine: { color: colors.muted, fontSize: 13, marginTop: 2 },
+  attachmentMeta: { color: colors.accentDark, fontSize: 12, fontWeight: "800", marginTop: spacing.xs },
   row: { flexDirection: "row", gap: spacing.xs, marginTop: spacing.sm },
   pill: {
     backgroundColor: colors.background,

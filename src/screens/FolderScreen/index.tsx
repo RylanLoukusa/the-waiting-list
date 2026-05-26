@@ -1,15 +1,16 @@
-import React, { useCallback, useState } from "react";
-import { Alert, Pressable, ScrollView, Share, Text, View } from "react-native";
+import React, { useCallback, useMemo, useState } from "react";
+import { Alert, Image, Linking, Pressable, ScrollView, Share, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
 import { EmptyState } from "../../components/EmptyState";
 import { FolderCard } from "../../components/FolderCard";
-import { ItemCard } from "../../components/ItemCard";
+import { MediaDisplay } from "../../components/MediaDisplay";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { RootStackParamList } from "../../navigation/types";
 import { useWaitingList } from "../../storage/storage";
 import { Folder, SavedItem } from "../../types/models";
+import { getFolderPatterns } from "../../utils/folderContext";
 import { canAddChildFolder, getChildFolders, getFolderById, getFolderPath, getItemsInFolder } from "../../utils/folderTree";
 import { pickRandomWaitingItem } from "../../utils/itemFilters";
 import { styles } from "./styles";
@@ -33,21 +34,106 @@ const SubfolderRow = React.memo(function SubfolderRow({ child, count, onOpenFold
 type FolderItemRowProps = {
   item: SavedItem;
   onOpenItemDetail: (itemId: string) => void;
+  onToggleChecklistItem: (itemId: string, listItemId: string) => void;
 };
 
-const FolderItemRow = React.memo(function FolderItemRow({ item, onOpenItemDetail }: FolderItemRowProps) {
+const FolderItemRow = React.memo(function FolderItemRow({ item, onOpenItemDetail, onToggleChecklistItem }: FolderItemRowProps) {
   const onPress = useCallback(() => {
     onOpenItemDetail(item.id);
   }, [item.id, onOpenItemDetail]);
 
-  return <ItemCard item={item} onPress={onPress} />;
+  const onPressOpenUrl = useCallback(() => {
+    if (item.url) void Linking.openURL(item.url);
+  }, [item.url]);
+
+  return (
+    <View style={styles.fullItemBlock}>
+      <Text style={styles.fullItemSubheading}>{item.title}</Text>
+      <View style={styles.fullItemCard}>
+        <View style={styles.fullItemHeader}>
+          <View style={styles.fullItemTitleGroup}>
+            <Text style={styles.fullItemType}>{item.type.toUpperCase()}</Text>
+          </View>
+          <Pressable onPress={onPress} style={({ pressed }) => [styles.openItemButton, pressed && styles.openItemButtonPressed]}>
+            <Text style={styles.openItemButtonText}>Open item</Text>
+          </Pressable>
+        </View>
+
+        {!!item.url && (
+          <Pressable onPress={onPressOpenUrl} style={({ pressed }) => [styles.fullItemLink, pressed && styles.fullItemLinkPressed]}>
+            <Text numberOfLines={2} style={styles.fullItemLinkText}>{item.url}</Text>
+          </Pressable>
+        )}
+
+        {!item.attachments?.length && <MediaDisplay media={item.media} style={styles.fullItemMedia} />}
+
+        {!!item.description && <Text style={styles.fullItemDescription}>{item.description}</Text>}
+
+        {item.type === "list" && !!item.listItems?.length && (
+          <View style={styles.fullItemList}>
+            {item.listItems.map((listItem) => (
+              <View key={listItem.id} style={styles.fullItemListRow}>
+                {listItem.kind === "check" ? (
+                  <Pressable
+                    accessibilityLabel={listItem.checked ? "Mark checklist item incomplete" : "Mark checklist item complete"}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: !!listItem.checked }}
+                    onPress={() => onToggleChecklistItem(item.id, listItem.id)}
+                    style={({ pressed }) => [styles.fullItemCheckbox, pressed && styles.fullItemCheckboxPressed]}
+                  >
+                    <Text style={styles.fullItemMarker}>{listItem.checked ? "☑" : "☐"}</Text>
+                  </Pressable>
+                ) : (
+                  <Text style={[styles.fullItemMarker, styles.fullItemBullet]}>•</Text>
+                )}
+                <Text style={[styles.fullItemListText, listItem.checked && styles.fullItemListTextDone]}>{listItem.text}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {!!item.attachments?.length && (
+          <View style={styles.fullItemAttachments}>
+            {item.attachments.map((attachment) =>
+              attachment.mediaType === "image" ? (
+                <Image key={attachment.id} source={{ uri: attachment.uri }} style={styles.fullItemAttachmentImage} />
+              ) : (
+                <View key={attachment.id} style={styles.fullItemAttachmentVideo}>
+                  <Text style={styles.fullItemAttachmentVideoText}>Video: {attachment.uri.split("/").pop()}</Text>
+                </View>
+              ),
+            )}
+          </View>
+        )}
+
+        <View style={styles.fullItemFooter}>
+          <View style={styles.fullItemPills}>
+            <Text style={styles.fullItemPill}>{item.status}</Text>
+            <Text style={styles.fullItemPill}>{item.priority} priority</Text>
+          </View>
+          <Text numberOfLines={1} style={styles.fullItemTags}>{item.tags.join(", ") || "No tags"}</Text>
+        </View>
+      </View>
+    </View>
+  );
 });
 
 export const FolderScreen = ({ navigation, route }: Props) => {
-  const { folders, items, deleteFolder } = useWaitingList();
+  const { folders, items, updateItem, deleteFolder } = useWaitingList();
   const [showAllSubfolders, setShowAllSubfolders] = useState(false);
+  const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
 
   const folder = getFolderById(folders, route.params.folderId);
+  const subfolders = useMemo(() => (folder ? getChildFolders(folders, folder.id) : []), [folder, folders]);
+  const visibleSubfolders = showAllSubfolders ? subfolders : subfolders.slice(0, 3);
+  const hiddenSubfolderCount = subfolders.length - visibleSubfolders.length;
+  const folderItems = useMemo(() => (folder ? getItemsInFolder(items, folder.id) : []), [folder, items]);
+  const folderPatterns = useMemo(() => getFolderPatterns(folderItems), [folderItems]);
+  const selectedPattern = folderPatterns.find((pattern) => pattern.id === selectedPatternId);
+  const displayedItems = selectedPattern
+    ? folderItems.filter((item) => selectedPattern.itemIds.includes(item.id))
+    : folderItems;
+  const canNestMore = folder ? canAddChildFolder(folders, folder.id) : false;
 
   const onBreadcrumbHome = useCallback(() => {
     navigation.navigate("Home");
@@ -74,59 +160,68 @@ export const FolderScreen = ({ navigation, route }: Props) => {
     [navigation],
   );
 
-  if (!folder) {
-    return (
-      <View style={styles.screen}>
-        <ScreenTopBar navigation={navigation} />
-        <View style={styles.notFoundBody}>
-          <EmptyState title="Folder not found" message="This folder may have been deleted." />
-        </View>
-      </View>
-    );
-  }
+  const onToggleChecklistItem = useCallback(
+    (itemId: string, listItemId: string): void => {
+      const currentItem = items.find((candidate) => candidate.id === itemId);
+      if (!currentItem?.listItems) return;
 
-  const subfolders = getChildFolders(folders, folder.id);
-  const visibleSubfolders = showAllSubfolders ? subfolders : subfolders.slice(0, 3);
-  const hiddenSubfolderCount = subfolders.length - visibleSubfolders.length;
-  const folderItems = getItemsInFolder(items, folder.id);
-  const canNestMore = canAddChildFolder(folders, folder.id);
+      const listItems = currentItem.listItems.map((listItem) =>
+        listItem.id === listItemId && listItem.kind === "check"
+          ? { ...listItem, checked: !listItem.checked }
+          : listItem,
+      );
+      const checklistItems = listItems.filter((listItem) => listItem.kind === "check");
+      const isChecklistComplete = checklistItems.length > 0 && checklistItems.every((listItem) => listItem.checked);
+
+      updateItem(currentItem.id, {
+        listItems,
+        status: isChecklistComplete ? "done" : currentItem.status === "done" ? "waiting" : currentItem.status,
+      });
+    },
+    [items, updateItem],
+  );
 
   const onPressEditFolder = useCallback(() => {
+    if (!folder) return;
     navigation.navigate("AddEditFolder", { folderId: folder.id });
-  }, [navigation, folder.id]);
+  }, [folder, navigation]);
 
   const onPressAddItem = useCallback(() => {
+    if (!folder) return;
     navigation.navigate("AddEditItem", { folderId: folder.id });
-  }, [navigation, folder.id]);
+  }, [folder, navigation]);
 
   const onPressAddSubfolder = useCallback(() => {
-    if (canNestMore) {
-      navigation.navigate("AddEditFolder", { parentFolderId: folder.id });
-    }
-  }, [canNestMore, navigation, folder.id]);
+    if (!folder || !canNestMore) return;
+    navigation.navigate("AddEditFolder", { parentFolderId: folder.id });
+  }, [canNestMore, folder, navigation]);
 
   const onPressPickSomething = useCallback(() => {
+    if (!folder) return;
     const picked = pickRandomWaitingItem(items, folders, folder.id);
     if (!picked) {
       Alert.alert("Nothing waiting here", "This folder does not have any waiting items to pick from.");
       return;
     }
     navigation.navigate("ItemDetail", { itemId: picked.id });
-  }, [folder.id, folders, items, navigation]);
+  }, [folder, folders, items, navigation]);
 
   const onPressShare = useCallback(async (): Promise<void> => {
+    if (!folder) return;
     const itemLines = folderItems.map((item) => `- ${item.title}`);
     const subfolderLines = subfolders.map((child) => `- ${child.icon ?? "📁"} ${child.name}`);
     const sections = [
       `${folder.icon ?? "📁"} ${folder.name}`,
+      folder.purpose ?? "",
       subfolderLines.length ? `Subfolders:\n${subfolderLines.join("\n")}` : "",
       itemLines.length ? `Items:\n${itemLines.join("\n")}` : "",
     ].filter(Boolean);
 
     await Share.share({ message: sections.join("\n\n") });
-  }, [folder.icon, folder.name, folderItems, subfolders]);
+  }, [folder, folderItems, subfolders]);
 
   const confirmDelete = useCallback((): void => {
+    if (!folder) return;
     Alert.alert(
       "Delete folder?",
       "This recursively deletes nested subfolders and saved items inside this folder.",
@@ -142,9 +237,10 @@ export const FolderScreen = ({ navigation, route }: Props) => {
         },
       ],
     );
-  }, [deleteFolder, folder.id, navigation]);
+  }, [deleteFolder, folder, navigation]);
 
   const onOpenMenu = useCallback((): void => {
+    if (!folder) return;
     Alert.alert("Folder actions", folder.name, [
       { text: "Edit", onPress: onPressEditFolder },
       { text: "Pick Something", onPress: onPressPickSomething },
@@ -152,7 +248,22 @@ export const FolderScreen = ({ navigation, route }: Props) => {
       { text: "Delete folder", style: "destructive", onPress: confirmDelete },
       { text: "Cancel", style: "cancel" },
     ]);
-  }, [confirmDelete, folder.name, onPressEditFolder, onPressPickSomething, onPressShare]);
+  }, [confirmDelete, folder, onPressEditFolder, onPressPickSomething, onPressShare]);
+
+  const onPressPattern = useCallback((patternId: string): void => {
+    setSelectedPatternId((current) => (current === patternId ? null : patternId));
+  }, []);
+
+  if (!folder) {
+    return (
+      <View style={styles.screen}>
+        <ScreenTopBar navigation={navigation} />
+        <View style={styles.notFoundBody}>
+          <EmptyState title="Folder not found" message="This folder may have been deleted." />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.screen}>
@@ -172,6 +283,7 @@ export const FolderScreen = ({ navigation, route }: Props) => {
             <Text style={styles.moreButtonText}>More</Text>
           </Pressable>
         </View>
+        {!!folder.purpose && <Text style={styles.purpose}>{folder.purpose}</Text>}
 
         <View style={styles.actions}>
           <AppButton label="Add item" onPress={onPressAddItem} style={styles.action} />
@@ -210,14 +322,52 @@ export const FolderScreen = ({ navigation, route }: Props) => {
           </>
         )}
 
-        <Text style={styles.section}>Items</Text>
+        {folderPatterns.length > 0 && (
+          <>
+            <Text style={styles.section}>Patterns</Text>
+            <View style={styles.patternGrid}>
+              {folderPatterns.map((pattern) => {
+                const isSelected = selectedPattern?.id === pattern.id;
+                return (
+                  <Pressable
+                    key={pattern.id}
+                    onPress={() => onPressPattern(pattern.id)}
+                    style={({ pressed }) => [
+                      styles.patternChip,
+                      isSelected && styles.patternChipSelected,
+                      pressed && styles.patternChipPressed,
+                    ]}
+                  >
+                    <Text style={[styles.patternLabel, isSelected && styles.patternLabelSelected]}>{pattern.label}</Text>
+                    <Text style={[styles.patternDetail, isSelected && styles.patternDetailSelected]}>{pattern.itemIds.length}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
+        )}
+
+        <Text style={styles.section}>{selectedPattern ? selectedPattern.label : "Items"}</Text>
+        {!!selectedPattern && <Text style={styles.selectedPatternDetail}>{selectedPattern.detail}</Text>}
         {folderItems.length === 0 ? (
           <EmptyState
             title="No items here yet."
             message="Add an idea, link, image, or video to this folder."
           />
+        ) : displayedItems.length === 0 ? (
+          <EmptyState
+            title="No matches here."
+            message="Try another pattern or clear the current one."
+          />
         ) : (
-          folderItems.map((item) => <FolderItemRow key={item.id} item={item} onOpenItemDetail={onOpenItemDetail} />)
+          displayedItems.map((item) => (
+            <FolderItemRow
+              key={item.id}
+              item={item}
+              onOpenItemDetail={onOpenItemDetail}
+              onToggleChecklistItem={onToggleChecklistItem}
+            />
+          ))
         )}
       </ScrollView>
     </View>

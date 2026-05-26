@@ -38,6 +38,7 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
   const editing = getFolderById(folders, route.params?.folderId);
 
   const [name, setName] = useState(editing?.name ?? "");
+  const [purpose, setPurpose] = useState(editing?.purpose ?? "");
   const [icon, setIcon] = useState(editing?.icon ?? "📁");
   const [color, setColor] = useState(editing?.color ?? "#D8C7AA");
   const [parentFolderId, setParentFolderId] = useState<string | null>(
@@ -113,6 +114,10 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
     setExpandedParentFolderIds(new Set());
   }, [folders]);
 
+  const chooseHomeFolder = useCallback((): void => {
+    chooseParentFolder(null);
+  }, [chooseParentFolder]);
+
   const save = useCallback((): void => {
     const normalizedIcon = normalizeFolderIcon(icon);
 
@@ -124,7 +129,7 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
         );
         return;
       }
-      updateFolder(editing.id, { name, icon: normalizedIcon, color, parentFolderId });
+      updateFolder(editing.id, { name, purpose, icon: normalizedIcon, color, parentFolderId });
       navigation.goBack();
       return;
     }
@@ -132,9 +137,9 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
       Alert.alert("Max depth reached", "Folders can be nested up to 5 levels deep.");
       return;
     }
-    const folder = createFolder({ name, icon: normalizedIcon, color, parentFolderId });
+    const folder = createFolder({ name, purpose, icon: normalizedIcon, color, parentFolderId });
     navigation.replace("Folder", { folderId: folder.id });
-  }, [color, createFolder, editing, folders, icon, name, navigation, parentFolderId, updateFolder]);
+  }, [color, createFolder, editing, folders, icon, name, navigation, parentFolderId, purpose, updateFolder]);
 
   return (
     <View style={styles.screen}>
@@ -144,6 +149,16 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
 
         <Text style={styles.label}>Name</Text>
         <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Weekend Ideas" />
+
+        <Text style={styles.label}>Purpose</Text>
+        <TextInput
+          multiline
+          onChangeText={setPurpose}
+          placeholder="Things that belong together here..."
+          style={[styles.input, styles.purposeInput]}
+          textAlignVertical="top"
+          value={purpose}
+        />
 
         <Text style={styles.label}>Icon</Text>
         <TextInput
@@ -223,7 +238,7 @@ export const AddEditFolderScreen = ({ navigation, route }: Props) => {
           />
 
           <Pressable
-            onPress={() => chooseParentFolder(null)}
+            onPress={chooseHomeFolder}
             style={({ pressed }) => [
               styles.homeChoice,
               parentFolderId === null && styles.homeChoiceSelected,

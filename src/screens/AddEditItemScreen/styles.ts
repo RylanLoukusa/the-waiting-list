@@ -42,6 +42,58 @@ export const styles = StyleSheet.create({
     fontWeight: "900",
     marginTop: spacing.lg,
   },
+  listEditor: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: spacing.xs,
+    padding: spacing.md,
+  },
+  listRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  listMarker: {
+    alignItems: "center",
+    backgroundColor: colors.background,
+    borderRadius: 10,
+    height: 34,
+    justifyContent: "center",
+    width: 34,
+  },
+  listMarkerText: {
+    color: colors.accentDark,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  listInput: {
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    color: colors.ink,
+    flex: 1,
+    padding: spacing.sm,
+  },
+  listAction: {
+    color: colors.accentDark,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  listRemove: {
+    color: colors.danger,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  listButtons: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  listButton: {
+    flex: 1,
+  },
   button: {
     marginTop: spacing.lg,
   },

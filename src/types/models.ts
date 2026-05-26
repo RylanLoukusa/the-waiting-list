@@ -1,6 +1,8 @@
-export type ItemType = "text" | "link" | "image" | "video";
+export type ItemType = "text" | "list" | "link" | "image" | "video";
 export type ItemStatus = "waiting" | "planned" | "done" | "skipped";
 export type ItemPriority = "low" | "medium" | "high";
+export type ListItemKind = "check" | "bullet";
+export type ItemConnectionRelation = "related" | "similar" | "compare" | "alternative" | "part_of" | "inspired_by";
 
 export type Folder = {
   id: string;
@@ -8,6 +10,7 @@ export type Folder = {
   parentFolderId: string | null;
   icon?: string;
   color?: string;
+  purpose?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -17,6 +20,27 @@ export type MediaMetadata = {
   mediaType?: "image" | "video"; // type of file in storage
   tiktokUrl?: string; // external TikTok URL
   thumbnailPath?: string; // path to thumbnail in storage
+};
+
+export type SavedListItem = {
+  id: string;
+  kind: ListItemKind;
+  text: string;
+  checked?: boolean;
+};
+
+export type ItemAttachment = {
+  id: string;
+  uri: string;
+  mediaType: "image" | "video";
+  caption?: string;
+};
+
+export type ItemConnection = {
+  itemId: string;
+  relation: ItemConnectionRelation;
+  note?: string;
+  createdAt?: string;
 };
 
 export type SavedItem = {
@@ -29,6 +53,10 @@ export type SavedItem = {
   mediaUri?: string; // local URI during editing
   thumbnailUri?: string; // local thumbnail URI during editing
   media?: MediaMetadata; // metadata for stored media
+  attachments?: ItemAttachment[];
+  listItems?: SavedListItem[];
+  richText?: string;
+  connections?: ItemConnection[];
   tags: string[];
   status: ItemStatus;
   priority: ItemPriority;

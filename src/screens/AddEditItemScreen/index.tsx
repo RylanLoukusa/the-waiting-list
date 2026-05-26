@@ -1,27 +1,28 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
-import { FolderChoiceRow } from "../../components/FolderChoiceRow";
+import { FolderPickerField } from "../../components/FolderPickerField";
 import { MediaPicker } from "../../components/MediaPicker";
 import { OptionChoiceRow } from "../../components/OptionChoiceRow";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { RootStackParamList } from "../../navigation/types";
 import { uploadMediaToSupabase } from "../../lib/supabaseStorage";
 import { useWaitingList } from "../../storage/storage";
-import { ItemPriority, ItemStatus, ItemType } from "../../types/models";
+import { ItemAttachment, ItemPriority, ItemStatus, ItemType, ListItemKind, SavedListItem } from "../../types/models";
 import { detectItemType, suggestFolders, suggestTags, suggestTitle } from "../../utils/folderSuggestions";
-import { getFolderHierarchyRows } from "../../utils/folderTree";
+import { createId } from "../../utils/id";
 import { styles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddEditItem">;
 
-const types: ItemType[] = ["text", "link", "image", "video"];
+const types: ItemType[] = ["text", "list", "link", "image", "video"];
 const statuses: ItemStatus[] = ["waiting", "planned", "done", "skipped"];
 const priorities: ItemPriority[] = ["low", "medium", "high"];
 
 const typeChoices: Record<ItemType, { label: string; detail: string; tone: string }> = {
-  text: { label: "Text", detail: "Notes, ideas, reminders", tone: "#8A9A5B" },
+  text: { label: "Note", detail: "Rich notes, ideas, reminders", tone: "#8A9A5B" },
+  list: { label: "List", detail: "Checklist or bullet rows", tone: "#DFAE73" },
   link: { label: "Link", detail: "Articles, products, places", tone: "#6F8FAF" },
   image: { label: "Image", detail: "Photos and visual references", tone: "#B9856D" },
   video: { label: "Video", detail: "Clips, reels, and watch-later saves", tone: "#9B7BB5" },
@@ -52,16 +53,17 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
   const [tags, setTags] = useState(editing?.tags.join(", ") ?? "");
   const [status, setStatus] = useState<ItemStatus>(editing?.status ?? "waiting");
   const [priority, setPriority] = useState<ItemPriority>(editing?.priority ?? "medium");
+  const [listItems, setListItems] = useState<SavedListItem[]>(
+    editing?.listItems?.length ? editing.listItems : [{ id: createId("list-item"), kind: "check", text: "", checked: false }],
+  );
+  const [attachments, setAttachments] = useState<ItemAttachment[]>(
+    editing?.attachments ?? (editing?.mediaUri ? [{ id: createId("attachment"), uri: editing.mediaUri, mediaType: editing.type === "video" ? "video" : "image" }] : []),
+  );
   const [selectedMediaUri, setSelectedMediaUri] = useState<string | undefined>(editing?.mediaUri);
   const [selectedMediaType, setSelectedMediaType] = useState<"image" | "video" | undefined>(
     editing?.type === "image" ? "image" : editing?.type === "video" ? "video" : undefined
   );
   const [isSaving, setIsSaving] = useState(false);
-  const folderRows = useMemo(() => getFolderHierarchyRows(folders), [folders]);
-  const folderDepthById = useMemo(
-    () => new Map(folderRows.map((row) => [row.folder.id, row.depth])),
-    [folderRows],
-  );
 
   const applySuggestion = useCallback((): void => {
     setTitle(suggestTitle(content));
@@ -73,6 +75,18 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
   const handleMediaSelected = useCallback((uri: string, mediaType: "image" | "video") => {
     setSelectedMediaUri(uri);
     setSelectedMediaType(mediaType);
+  }, []);
+
+  const updateListItem = useCallback((itemId: string, updates: Partial<SavedListItem>): void => {
+    setListItems((current) => current.map((item) => (item.id === itemId ? { ...item, ...updates } : item)));
+  }, []);
+
+  const addListItem = useCallback((kind: ListItemKind): void => {
+    setListItems((current) => [...current, { id: createId("list-item"), kind, text: "", checked: false }]);
+  }, []);
+
+  const removeListItem = useCallback((itemId: string): void => {
+    setListItems((current) => (current.length > 1 ? current.filter((item) => item.id !== itemId) : current));
   }, []);
 
   const save = useCallback(async (): Promise<void> => {
@@ -111,6 +125,14 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
         type,
         url: type === "link" ? content : undefined,
         media: mediaMetadata,
+        attachments: attachments.length > 0 ? attachments : undefined,
+        listItems:
+          type === "list"
+            ? listItems
+                .map((item) => ({ ...item, text: item.text.trim() }))
+                .filter((item) => item.text.length > 0)
+            : undefined,
+        richText: content.trim() || undefined,
         tags: tags
           .split(",")
           .map((tag) => tag.trim())
@@ -129,7 +151,7 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
     } finally {
       setIsSaving(false);
     }
-  }, [content, createItem, editing, folderId, navigation, priority, selectedMediaType, selectedMediaUri, status, tags, title, type, updateItem]);
+  }, [attachments, content, createItem, editing, folderId, listItems, navigation, priority, selectedMediaType, selectedMediaUri, status, tags, title, type, updateItem]);
 
   return (
     <View style={styles.screen}>
@@ -166,30 +188,54 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
           );
         })}
 
+        {type === "list" && (
+          <View style={styles.listEditor}>
+            {listItems.map((listItem) => (
+              <View key={listItem.id} style={styles.listRow}>
+                <Pressable
+                  onPress={() =>
+                    updateListItem(
+                      listItem.id,
+                      listItem.kind === "check" ? { checked: !listItem.checked } : { kind: "check", checked: false },
+                    )
+                  }
+                  style={styles.listMarker}
+                >
+                  <Text style={styles.listMarkerText}>{listItem.kind === "check" ? (listItem.checked ? "☑" : "☐") : "•"}</Text>
+                </Pressable>
+                <TextInput
+                  style={styles.listInput}
+                  value={listItem.text}
+                  onChangeText={(text) => updateListItem(listItem.id, { text })}
+                  placeholder={listItem.kind === "check" ? "Checklist item" : "Bullet item"}
+                />
+                <Pressable onPress={() => updateListItem(listItem.id, { kind: listItem.kind === "check" ? "bullet" : "check", checked: false })}>
+                  <Text style={styles.listAction}>{listItem.kind === "check" ? "Bullet" : "Check"}</Text>
+                </Pressable>
+                <Pressable onPress={() => removeListItem(listItem.id)}>
+                  <Text style={styles.listRemove}>Remove</Text>
+                </Pressable>
+              </View>
+            ))}
+            <View style={styles.listButtons}>
+              <AppButton label="Add checklist row" variant="secondary" onPress={() => addListItem("check")} style={styles.listButton} />
+              <AppButton label="Add bullet row" variant="secondary" onPress={() => addListItem("bullet")} style={styles.listButton} />
+            </View>
+          </View>
+        )}
+
         {(type === "image" || type === "video") && (
-          <MediaPicker onMediaSelected={handleMediaSelected} initialUri={selectedMediaUri} style={styles.button} />
+          <MediaPicker
+            onMediaSelected={handleMediaSelected}
+            initialUri={selectedMediaUri}
+            attachments={attachments}
+            onAttachmentsChange={setAttachments}
+            style={styles.button}
+          />
         )}
 
         <Text style={styles.section}>Folder</Text>
-        {suggestions.map((suggestion) => (
-          <FolderChoiceRow
-            key={suggestion.folder.id}
-            folder={suggestion.folder}
-            depth={folderDepthById.get(suggestion.folder.id) ?? 0}
-            prefix="Suggested"
-            isSelected={folderId === suggestion.folder.id}
-            onPress={() => setFolderId(suggestion.folder.id)}
-          />
-        ))}
-        {folderRows.map(({ folder, depth }) => (
-          <FolderChoiceRow
-            key={folder.id}
-            folder={folder}
-            depth={depth}
-            isSelected={folderId === folder.id}
-            onPress={() => setFolderId(folder.id)}
-          />
-        ))}
+        <FolderPickerField folders={folders} selectedFolderId={folderId} onSelectFolder={setFolderId} />
 
         <Text style={styles.label}>Tags</Text>
         <TextInput

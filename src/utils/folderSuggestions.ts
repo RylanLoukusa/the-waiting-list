@@ -64,10 +64,14 @@ export const suggestFolders = (content: string, folders: Folder[], items: SavedI
 
   folders.forEach((folder) => {
     const pathLabel = getFolderPathLabel(folders, folder.id).toLowerCase();
+    const folderContext = `${pathLabel} ${folder.purpose ?? ""}`.toLowerCase();
     folder.name.toLowerCase().split(/\s+/).forEach((part) => {
       if (part.length > 2 && text.includes(part)) addScore(folder, 3, `Matches “${folder.name}”`);
     });
     if (text.includes(pathLabel)) addScore(folder, 5, "Matches folder path");
+    folderContext.split(/\W+/).forEach((part) => {
+      if (part.length > 3 && text.includes(part)) addScore(folder, 2, "Matches folder context");
+    });
   });
 
   keywordRules.forEach((rule) => {
