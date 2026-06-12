@@ -1,22 +1,24 @@
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, Image, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Image, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { AppButton } from "./AppButton";
 import { ItemAttachment } from "../types/models";
 import { createId } from "../utils/id";
+import { VideoPreview } from "./VideoPreview";
 
 interface MediaPickerProps {
   onMediaSelected: (uri: string, type: "image" | "video") => void;
   initialUri?: string;
+  initialMediaType?: "image" | "video";
   attachments?: ItemAttachment[];
   onAttachmentsChange?: (attachments: ItemAttachment[]) => void;
   style?: any;
 }
 
-export const MediaPicker: React.FC<MediaPickerProps> = ({ onMediaSelected, initialUri, attachments, onAttachmentsChange, style }) => {
+export const MediaPicker: React.FC<MediaPickerProps> = ({ onMediaSelected, initialUri, initialMediaType, attachments, onAttachmentsChange, style }) => {
   const [selectedUri, setSelectedUri] = useState<string | undefined>(initialUri);
   const [isLoading, setIsLoading] = useState(false);
-  const [mediaType, setMediaType] = useState<"image" | "video" | undefined>();
+  const [mediaType, setMediaType] = useState<"image" | "video" | undefined>(initialMediaType);
   const isMulti = !!onAttachmentsChange;
 
   const addAttachment = useCallback(
@@ -31,9 +33,7 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({ onMediaSelected, initi
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
+        quality: 1,
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -99,9 +99,7 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({ onMediaSelected, initi
               {attachment.mediaType === "image" ? (
                 <Image source={{ uri: attachment.uri }} style={{ width: "100%", height: 160, borderRadius: 8 }} />
               ) : (
-                <View style={{ width: "100%", height: 160, borderRadius: 8, backgroundColor: "#000", justifyContent: "center", alignItems: "center" }}>
-                  <Text style={{ color: "#fff" }}>Video: {attachment.uri.split("/").pop()}</Text>
-                </View>
+                <VideoPreview uri={attachment.uri} style={{ width: "100%", height: 160 }} />
               )}
               <AppButton label="Remove" onPress={() => removeAttachment(attachment.id)} variant="secondary" style={{ marginTop: 6 }} />
             </View>
@@ -112,9 +110,7 @@ export const MediaPicker: React.FC<MediaPickerProps> = ({ onMediaSelected, initi
       {!isMulti && selectedUri && mediaType === "image" && <Image source={{ uri: selectedUri }} style={{ width: "100%", height: 200, borderRadius: 8, marginBottom: 12 }} />}
 
       {!isMulti && selectedUri && mediaType === "video" && (
-        <View style={{ width: "100%", height: 200, borderRadius: 8, marginBottom: 12, backgroundColor: "#000", justifyContent: "center", alignItems: "center" }}>
-          <Text style={{ color: "#fff" }}>Video: {selectedUri.split("/").pop()}</Text>
-        </View>
+        <VideoPreview uri={selectedUri} style={{ width: "100%", height: 200, marginBottom: 12 }} />
       )}
 
       {isLoading && <ActivityIndicator size="large" style={{ marginBottom: 12 }} />}

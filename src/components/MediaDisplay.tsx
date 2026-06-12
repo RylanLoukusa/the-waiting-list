@@ -2,13 +2,16 @@ import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Image, Linking, Text, TouchableOpacity, View } from "react-native";
 import { MediaMetadata } from "../types/models";
 import { getSignedMediaUrl } from "../lib/supabaseStorage";
+import { VideoPreview } from "./VideoPreview";
 
 interface MediaDisplayProps {
   media?: MediaMetadata;
+  imageHeight?: number;
   style?: any;
+  videoHeight?: number;
 }
 
-export const MediaDisplay: React.FC<MediaDisplayProps> = ({ media, style }) => {
+export const MediaDisplay: React.FC<MediaDisplayProps> = ({ media, imageHeight = 300, style, videoHeight = 260 }) => {
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -42,18 +45,11 @@ export const MediaDisplay: React.FC<MediaDisplayProps> = ({ media, style }) => {
   // Stored media (image/video)
   if (media.storagePath && signedUrl) {
     if (media.mediaType === "image") {
-      return <Image source={{ uri: signedUrl }} style={[{ width: "100%", height: 300, borderRadius: 8 }, style]} />;
+      return <Image source={{ uri: signedUrl }} style={[{ width: "100%", height: imageHeight, borderRadius: 8 }, style]} />;
     }
 
     if (media.mediaType === "video") {
-      return (
-        <TouchableOpacity onPress={() => Linking.openURL(signedUrl)} style={[{ marginVertical: 12 }, style]}>
-          <View style={{ backgroundColor: "#000", borderRadius: 8, height: 200, justifyContent: "center", alignItems: "center" }}>
-            <Text style={{ color: "#fff", fontSize: 48 }}>▶️</Text>
-            <Text style={{ color: "#aaa", fontSize: 12, marginTop: 8 }}>Tap to play video</Text>
-          </View>
-        </TouchableOpacity>
-      );
+      return <VideoPreview uri={signedUrl} style={[{ width: "100%", height: videoHeight, marginVertical: 12 }, style]} />;
     }
   }
 

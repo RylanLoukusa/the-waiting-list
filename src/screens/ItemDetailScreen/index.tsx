@@ -2,12 +2,14 @@ import React, { useCallback, useMemo, useRef } from "react";
 import { Alert, GestureResponderEvent, Image, Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
-import { MediaDisplay } from "../../components/MediaDisplay";
+import { MediaCollectionDisplay } from "../../components/MediaCollectionDisplay";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
+import { VideoPreview } from "../../components/VideoPreview";
 import { RootStackParamList } from "../../navigation/types";
 import { useWaitingList } from "../../storage/storage";
 import { getRelatedItems } from "../../utils/folderContext";
 import { getFolderPathLabel, getItemsInFolder } from "../../utils/folderTree";
+import { getItemTypeLabel } from "../../utils/itemTypes";
 import { styles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ItemDetail">;
@@ -94,6 +96,10 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
     if (item?.url) void Linking.openURL(item.url);
   }, [item?.url]);
 
+  const onPressOpenSourceUrl = useCallback(() => {
+    if (item?.sourceUrl) void Linking.openURL(item.sourceUrl);
+  }, [item?.sourceUrl]);
+
   const confirmDelete = useCallback((): void => {
     if (!item) return;
     Alert.alert("Delete item?", "This removes it from your Waiting List.", [
@@ -102,8 +108,14 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
         text: "Delete",
         style: "destructive",
         onPress: () => {
-          deleteItem(item.id);
-          navigation.navigate("Home");
+          void (async () => {
+            const result = await deleteItem(item.id);
+            if (!result.ok) {
+              Alert.alert("Could not delete item", result.error ?? "Unable to delete uploaded media.");
+              return;
+            }
+            navigation.navigate("Home");
+          })();
         },
       },
     ]);
@@ -119,6 +131,9 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
       </View>
     );
   }
+
+  const hasStoredMedia = !!item.mediaItems?.length || !!item.media?.storagePath || !!item.media?.tiktokUrl;
+  const shouldShowAttachments = !!item.attachments?.length && !hasStoredMedia;
 
   return (
     <View style={styles.screen}>
@@ -158,7 +173,7 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
             </Pressable>
           </View>
         )}
-        <Text style={styles.type}>{item.type.toUpperCase()}</Text>
+        <Text style={styles.type}>{getItemTypeLabel(item.type).toUpperCase()}</Text>
         <Text style={styles.title}>{item.title}</Text>
         <Text style={styles.path}>{getFolderPathLabel(folders, item.folderId)}</Text>
 
@@ -171,9 +186,27 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
           </View>
         )}
 
-        {!item.attachments?.length && <MediaDisplay media={item.media} style={styles.preview} />}
+        {!!item.sourceUrl && item.sourceUrl !== item.url && (
+          <View style={styles.preview}>
+            <Text style={styles.previewTitle}>
+              {item.sourcePlatform ? `Original on ${item.sourcePlatform}` : "Original source"}
+            </Text>
+            <Text style={styles.url} onPress={onPressOpenSourceUrl}>
+              {item.sourceUrl}
+            </Text>
+          </View>
+        )}
+
+        <MediaCollectionDisplay
+          media={item.media}
+          mediaItems={item.mediaItems}
+          itemHeight={400}
+          itemWidth={320}
+          style={styles.mediaPreview}
+        />
 
         {!!item.description && <Text style={styles.description}>{item.description}</Text>}
+        {!!item.sharedText && <Text style={styles.description}>{item.sharedText}</Text>}
 
         {item.type === "list" && !!item.listItems?.length && (
           <View style={styles.listBlock}>
@@ -198,15 +231,13 @@ export const ItemDetailScreen = ({ navigation, route }: Props) => {
           </View>
         )}
 
-        {!!item.attachments?.length && (
+        {shouldShowAttachments && (
           <View style={styles.attachmentBlock}>
-            {item.attachments.map((attachment) =>
+            {item.attachments?.map((attachment) =>
               attachment.mediaType === "image" ? (
                 <Image key={attachment.id} source={{ uri: attachment.uri }} style={styles.attachmentImage} />
               ) : (
-                <View key={attachment.id} style={styles.attachmentVideo}>
-                  <Text style={styles.attachmentVideoText}>Video: {attachment.uri.split("/").pop()}</Text>
-                </View>
+                <VideoPreview key={attachment.id} uri={attachment.uri} style={styles.attachmentVideo} />
               ),
             )}
           </View>

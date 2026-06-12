@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { WaitingListData } from "../types/models";
+import { normalizeWaitingListData } from "../utils/itemTypes";
 
 const remoteUpdatedAtKey = (userId: string): string => `the-waiting-list:remoteUpdatedAt:${userId}`;
 
@@ -65,7 +66,7 @@ export const pullWaitingListForUser = async (
   }
 
   await writeStoredRemoteUpdatedAt(userId, remote.updated_at);
-  return { kind: "applied", data: remote.payload, remoteUpdatedAt: remote.updated_at };
+  return { kind: "applied", data: normalizeWaitingListData(remote.payload), remoteUpdatedAt: remote.updated_at };
 };
 
 export const pushWaitingListForUser = async (

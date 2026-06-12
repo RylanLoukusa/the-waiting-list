@@ -78,6 +78,11 @@ export const getDescendantFolderIds = (folders: Folder[], folderId: string): str
   return descendants;
 };
 
+export const getFolderTreeIds = (folders: Folder[], folderId: string): string[] => [
+  folderId,
+  ...getDescendantFolderIds(folders, folderId),
+];
+
 // Prevents moving a folder beneath itself or one of its descendants, which would create an impossible cycle.
 export const canMoveFolder = (folders: Folder[], folderId: string, nextParentFolderId: string | null): boolean => {
   if (folderId === nextParentFolderId) {
@@ -103,7 +108,7 @@ export const deleteFolderRecursively = (
   items: SavedItem[],
   folderId: string,
 ): { folders: Folder[]; items: SavedItem[] } => {
-  const folderIdsToDelete = [folderId, ...getDescendantFolderIds(folders, folderId)];
+  const folderIdsToDelete = getFolderTreeIds(folders, folderId);
   return {
     folders: folders.filter((folder) => !folderIdsToDelete.includes(folder.id)),
     items: items.filter((item) => !folderIdsToDelete.includes(item.folderId)),

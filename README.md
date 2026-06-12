@@ -48,8 +48,17 @@ npx expo start --tunnel
 
 separate terminal
 
+
+
+
+
 npx expo run:ios --device
 
 npx expo start --tunnel --clear --scheme thewaitinglist
 
+
 npm run ios
+
+
+
+

@@ -36,7 +36,7 @@ export const QuickAddModal = ({ visible, currentFolderId, onClose }: Props) => {
       description: content.trim(),
       type: preview.type,
       url: preview.type === "link" ? content.trim() : undefined,
-      mediaUri: preview.type === "image" || preview.type === "video" ? content.trim() : undefined,
+      mediaUri: preview.type === "media" ? content.trim() : undefined,
       tags: preview.tags,
       status: "waiting",
       priority: "medium",
@@ -55,7 +55,7 @@ export const QuickAddModal = ({ visible, currentFolderId, onClose }: Props) => {
             <Text style={styles.close}>Close</Text>
           </Pressable>
         </View>
-        <Text style={styles.label}>Paste a thought, URL, image URI, or video URI</Text>
+        <Text style={styles.label}>Paste a thought, URL, or media URI</Text>
         <TextInput
           style={styles.input}
           multiline

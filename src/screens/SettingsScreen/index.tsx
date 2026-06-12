@@ -1,9 +1,12 @@
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAuth, useIsSupabaseConfigured } from "../../auth/AuthContext";
+import { getSignedInLabel } from "../../auth/authDisplay";
 import { AppButton } from "../../components/AppButton";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
+import { deleteStoredMediaForItems } from "../../lib/supabaseStorage";
+import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from "../../legal/legalLinks";
 import { RootStackParamList } from "../../navigation/types";
 import { useWaitingList } from "../../storage/storage";
 import { styles } from "./styles";
@@ -11,8 +14,8 @@ import { styles } from "./styles";
 type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
 
 export const SettingsScreen = ({ navigation }: Props) => {
-  const { folders, items, resetToSeed } = useWaitingList();
-  const { session, isAuthReady, signOut } = useAuth();
+  const { folders, items, resetToSeed, clearLocalData } = useWaitingList();
+  const { session, isAuthReady, signOut, deleteAccount } = useAuth();
   const supabaseConfigured = useIsSupabaseConfigured();
 
   const [busy, setBusy] = useState(false);
@@ -32,9 +35,53 @@ export const SettingsScreen = ({ navigation }: Props) => {
     setBusy(false);
   }, [signOut]);
 
+  const onDeleteAccount = useCallback(async () => {
+    setBusy(true);
+    const mediaResult = await deleteStoredMediaForItems(items);
+    if (!mediaResult.ok) {
+      setBusy(false);
+      Alert.alert("Could not delete account", mediaResult.error ?? "Unable to delete uploaded media.");
+      return;
+    }
+
+    const result = await deleteAccount();
+    if (!result.error) {
+      clearLocalData();
+      setBusy(false);
+      Alert.alert("Account deleted", "Your account and synced Waiting List data have been deleted.");
+      return;
+    }
+
+    setBusy(false);
+    Alert.alert("Could not delete account", result.error);
+  }, [clearLocalData, deleteAccount, items]);
+
+  const confirmDeleteAccount = useCallback((): void => {
+    Alert.alert(
+      "Delete account?",
+      "This permanently deletes your account, synced folders, items, and uploaded media. Local data on this device will also be cleared.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete account",
+          style: "destructive",
+          onPress: onDeleteAccount,
+        },
+      ],
+    );
+  }, [onDeleteAccount]);
+
   const onPressLogin = useCallback(() => {
     navigation.navigate("Login");
   }, [navigation]);
+
+  const openLegalLink = useCallback(async (url: string): Promise<void> => {
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert("Could not open link", "Please try again.");
+    }
+  }, []);
 
   return (
     <View style={styles.screen}>
@@ -57,8 +104,9 @@ export const SettingsScreen = ({ navigation }: Props) => {
           <ActivityIndicator style={styles.button} />
         ) : session?.user ? (
           <>
-            <Text style={styles.signedIn}>Signed in as {session.user.email ?? session.user.id}</Text>
+            <Text style={styles.signedIn}>{getSignedInLabel(session)}</Text>
             <AppButton label="Sign out" variant="secondary" onPress={onSignOut} style={styles.button} />
+            <AppButton label="Delete account" variant="danger" onPress={confirmDeleteAccount} disabled={busy} style={styles.button} />
           </>
         ) : (
           <>
@@ -68,6 +116,18 @@ export const SettingsScreen = ({ navigation }: Props) => {
             <AppButton label="Go to login screen" variant="secondary" onPress={onPressLogin} style={styles.button} />
           </>
         )}
+
+        <Text style={styles.sectionTitle}>Legal</Text>
+        <View style={styles.legalLinks}>
+          <Pressable onPress={() => void openLegalLink(PRIVACY_POLICY_URL)} style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}>
+            <Text style={styles.legalLinkText}>Privacy Policy</Text>
+            <Text style={styles.legalLinkArrow}>›</Text>
+          </Pressable>
+          <Pressable onPress={() => void openLegalLink(TERMS_OF_USE_URL)} style={({ pressed }) => [styles.legalLink, pressed && styles.legalLinkPressed]}>
+            <Text style={styles.legalLinkText}>Terms of Use</Text>
+            <Text style={styles.legalLinkArrow}>›</Text>
+          </Pressable>
+        </View>
 
         <AppButton label="Reset to sample data" variant="danger" onPress={confirmReset} style={styles.button} />
         {busy ? <ActivityIndicator style={styles.button} /> : null}

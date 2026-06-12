@@ -1,4 +1,5 @@
 import { SavedItem } from "../types/models";
+import { getItemTypeLabel, normalizeItemType } from "./itemTypes";
 
 export type FolderPatternKind = "tag" | "phrase";
 
@@ -144,13 +145,15 @@ export const getRelatedItems = (item: SavedItem, folderItems: SavedItem[], limit
       const sharedTokens = Array.from(itemTokens).filter((token) => candidateTokens.has(token)).slice(0, 3);
       const candidateConnections = new Set(candidate.connections?.map((connection) => connection.itemId) ?? []);
       const isConnected = explicitConnectionIds.has(candidate.id) || candidateConnections.has(item.id);
-      const sameTypeScore = candidate.type === item.type && item.type !== "text" ? 1 : 0;
+      const itemType = normalizeItemType(item.type);
+      const candidateType = normalizeItemType(candidate.type);
+      const sameTypeScore = candidateType === itemType && itemType !== "text" ? 1 : 0;
       const score = sharedTags.length * 4 + sharedTokens.length + sameTypeScore + (isConnected ? 20 : 0);
       const reasons = [
         ...sharedTags.slice(0, 2).map((tag) => `#${tag}`),
         ...sharedTokens.map((token) => `mentions ${token}`),
         isConnected ? "connected" : "",
-        sameTypeScore ? `both ${item.type}` : "",
+        sameTypeScore ? `both ${getItemTypeLabel(itemType).toLowerCase()}` : "",
       ].filter(Boolean);
 
       return { item: candidate, score, reasons };

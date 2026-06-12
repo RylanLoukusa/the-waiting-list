@@ -130,20 +130,23 @@ export const styles = StyleSheet.create({
   },
   attachmentImage: {
     borderRadius: 18,
-    height: 220,
+    height: 400,
     width: "100%",
   },
   attachmentVideo: {
     alignItems: "center",
     backgroundColor: "#000",
     borderRadius: 18,
-    height: 180,
+    height: 400,
     justifyContent: "center",
     width: "100%",
   },
   attachmentVideoText: {
     color: colors.surface,
     fontWeight: "800",
+  },
+  mediaPreview: {
+    marginTop: spacing.lg,
   },
   preview: {
     backgroundColor: colors.surface,

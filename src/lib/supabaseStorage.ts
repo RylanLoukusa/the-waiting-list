@@ -1,5 +1,6 @@
 import { getSupabase } from "./supabase";
 import * as FileSystem from "expo-file-system/legacy";
+import type { SavedItem } from "../types/models";
 
 const STORAGE_BUCKET = "media";
 
@@ -117,4 +118,34 @@ export async function deleteMediaFromSupabase(storagePath: string): Promise<bool
     console.error("Error deleting file:", err);
     return false;
   }
+}
+
+const collectStoredMediaPaths = (items: SavedItem[]): string[] => {
+  const paths = new Set<string>();
+
+  items.forEach((item) => {
+    if (item.media?.storagePath) paths.add(item.media.storagePath);
+    if (item.media?.thumbnailPath) paths.add(item.media.thumbnailPath);
+    item.mediaItems?.forEach((mediaItem) => {
+      if (mediaItem.storagePath) paths.add(mediaItem.storagePath);
+      if (mediaItem.thumbnailPath) paths.add(mediaItem.thumbnailPath);
+    });
+  });
+
+  return Array.from(paths);
+};
+
+export async function deleteStoredMediaForItems(items: SavedItem[]): Promise<{ ok: boolean; error?: string }> {
+  const paths = collectStoredMediaPaths(items);
+  if (!paths.length) return { ok: true };
+
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, error: "Supabase not configured" };
+
+  const { error } = await supabase.storage.from(STORAGE_BUCKET).remove(paths);
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  return { ok: true };
 }

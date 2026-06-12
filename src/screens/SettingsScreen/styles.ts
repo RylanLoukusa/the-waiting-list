@@ -77,4 +77,32 @@ export const styles = StyleSheet.create({
     fontWeight: "800",
     marginTop: spacing.sm,
   },
+  legalLinks: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: spacing.md,
+    overflow: "hidden",
+  },
+  legalLink: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    minHeight: 52,
+    padding: spacing.md,
+  },
+  legalLinkPressed: {
+    opacity: 0.7,
+  },
+  legalLinkText: {
+    color: colors.ink,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  legalLinkArrow: {
+    color: colors.muted,
+    fontSize: 26,
+    lineHeight: 26,
+  },
 });

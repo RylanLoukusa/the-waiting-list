@@ -11,6 +11,10 @@ const googleIosUrlScheme = googleIosClientId.endsWith(".apps.googleusercontent.c
 module.exports = {
   expo: {
     ...appJson.expo,
+    ios: {
+      ...appJson.expo.ios,
+      usesAppleSignIn: true,
+    },
     android: {
       package: "com.rylanloukusa.thewaitinglist",
       adaptiveIcon: {
@@ -19,6 +23,8 @@ module.exports = {
       },
     },
     plugins: [
+      "expo-apple-authentication",
+      "expo-video",
       googleIosUrlScheme
         ? ["@react-native-google-signin/google-signin", { iosUrlScheme: googleIosUrlScheme }]
         : "@react-native-google-signin/google-signin",

@@ -1,31 +1,32 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
 import { FolderPickerField } from "../../components/FolderPickerField";
-import { MediaPicker } from "../../components/MediaPicker";
+import { MediaCollectionPicker } from "../../components/MediaCollectionPicker";
 import { OptionChoiceRow } from "../../components/OptionChoiceRow";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { RootStackParamList } from "../../navigation/types";
-import { uploadMediaToSupabase } from "../../lib/supabaseStorage";
+import { clearSharedImport, inferSourcePlatform, readSharedImport, titleFromSharedImport } from "../../share/sharedImport";
+import { deleteMediaFromSupabase, uploadMediaToSupabase } from "../../lib/supabaseStorage";
 import { useWaitingList } from "../../storage/storage";
-import { ItemAttachment, ItemPriority, ItemStatus, ItemType, ListItemKind, SavedListItem } from "../../types/models";
-import { detectItemType, suggestFolders, suggestTags, suggestTitle } from "../../utils/folderSuggestions";
+import { MediaCollectionItem, ItemPriority, ItemStatus, ItemType, ListItemKind, SavedListItem } from "../../types/models";
 import { createId } from "../../utils/id";
+import { isMediaItemType, normalizeItemType } from "../../utils/itemTypes";
 import { styles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddEditItem">;
 
-const types: ItemType[] = ["text", "list", "link", "image", "video"];
+const types = ["text", "list", "link", "media"] as const;
 const statuses: ItemStatus[] = ["waiting", "planned", "done", "skipped"];
 const priorities: ItemPriority[] = ["low", "medium", "high"];
+type SelectableItemType = (typeof types)[number];
 
-const typeChoices: Record<ItemType, { label: string; detail: string; tone: string }> = {
+const typeChoices: Record<SelectableItemType, { label: string; detail: string; tone: string }> = {
   text: { label: "Note", detail: "Rich notes, ideas, reminders", tone: "#8A9A5B" },
   list: { label: "List", detail: "Checklist or bullet rows", tone: "#DFAE73" },
   link: { label: "Link", detail: "Articles, products, places", tone: "#6F8FAF" },
-  image: { label: "Image", detail: "Photos and visual references", tone: "#B9856D" },
-  video: { label: "Video", detail: "Clips, reels, and watch-later saves", tone: "#9B7BB5" },
+  media: { label: "Media", detail: "Photos, videos, and visual references", tone: "#B9856D" },
 };
 
 const statusChoices: Record<ItemStatus, { label: string; detail: string; tone: string }> = {
@@ -45,10 +46,12 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
   const { folders, items, createItem, updateItem } = useWaitingList();
   const editing = items.find((item) => item.id === route.params?.itemId);
 
-  const [content, setContent] = useState(editing?.description ?? editing?.url ?? "");
-  const suggestions = useMemo(() => suggestFolders(content, folders, items), [content, folders, items]);
   const [title, setTitle] = useState(editing?.title ?? "");
-  const [type, setType] = useState<ItemType>(editing?.type ?? "text");
+  const [noteText, setNoteText] = useState(editing?.type === "text" ? editing.description ?? editing.richText ?? "" : "");
+  const [linkText, setLinkText] = useState(editing?.type === "link" ? editing.url ?? "" : "");
+  const [sourceUrl, setSourceUrl] = useState(editing?.sourceUrl ?? "");
+  const [sharedText, setSharedText] = useState(editing?.sharedText ?? "");
+  const [type, setType] = useState<ItemType>(normalizeItemType(editing?.type ?? "text"));
   const [folderId, setFolderId] = useState(editing?.folderId ?? route.params?.folderId ?? folders[0]?.id ?? "");
   const [tags, setTags] = useState(editing?.tags.join(", ") ?? "");
   const [status, setStatus] = useState<ItemStatus>(editing?.status ?? "waiting");
@@ -56,26 +59,71 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
   const [listItems, setListItems] = useState<SavedListItem[]>(
     editing?.listItems?.length ? editing.listItems : [{ id: createId("list-item"), kind: "check", text: "", checked: false }],
   );
-  const [attachments, setAttachments] = useState<ItemAttachment[]>(
-    editing?.attachments ?? (editing?.mediaUri ? [{ id: createId("attachment"), uri: editing.mediaUri, mediaType: editing.type === "video" ? "video" : "image" }] : []),
-  );
-  const [selectedMediaUri, setSelectedMediaUri] = useState<string | undefined>(editing?.mediaUri);
-  const [selectedMediaType, setSelectedMediaType] = useState<"image" | "video" | undefined>(
-    editing?.type === "image" ? "image" : editing?.type === "video" ? "video" : undefined
-  );
+  const [mediaItems, setMediaItems] = useState<MediaCollectionItem[]>(() => {
+    if (!editing) return [];
+    if (editing.mediaItems?.length) return editing.mediaItems;
+    if (editing.media?.storagePath) {
+      return [
+        {
+          id: editing.media.storagePath,
+          storagePath: editing.media.storagePath,
+          mediaType: editing.media.mediaType ?? "image",
+          thumbnailPath: editing.media.thumbnailPath,
+        },
+      ];
+    }
+    if (editing.mediaUri) {
+      return [
+        {
+          id: createId("media"),
+          localUri: editing.mediaUri,
+          mediaType: editing.media?.mediaType ?? (editing.type === "video" ? "video" : "image"),
+        },
+      ];
+    }
+    return [];
+  });
   const [isSaving, setIsSaving] = useState(false);
+  const sharedImportId = route.params?.sharedImportId;
+  const [loadedSharedImportId, setLoadedSharedImportId] = useState<string | null>(null);
 
-  const applySuggestion = useCallback((): void => {
-    setTitle(suggestTitle(content));
-    setType(detectItemType(content));
-    setTags(suggestTags(content).join(", "));
-    if (suggestions[0]) setFolderId(suggestions[0].folder.id);
-  }, [content, suggestions]);
+  useEffect(() => {
+    if (!sharedImportId || editing || loadedSharedImportId === sharedImportId) return;
 
-  const handleMediaSelected = useCallback((uri: string, mediaType: "image" | "video") => {
-    setSelectedMediaUri(uri);
-    setSelectedMediaType(mediaType);
-  }, []);
+    let cancelled = false;
+    setLoadedSharedImportId(sharedImportId);
+
+    void readSharedImport(sharedImportId)
+      .then((payload) => {
+        if (cancelled || !payload) return;
+
+        const nextSourceUrl = payload.sourceUrl ?? "";
+        const nextSharedText = payload.sharedText ?? "";
+        const nextMediaItems = payload.mediaItems ?? [];
+
+        setTitle((current) => current.trim() || titleFromSharedImport(payload));
+        setSourceUrl(nextSourceUrl);
+        setSharedText(nextSharedText);
+        setMediaItems(nextMediaItems);
+
+        if (nextMediaItems.length > 0) {
+          setType("media");
+        } else if (nextSourceUrl) {
+          setType("link");
+          setLinkText(nextSourceUrl);
+        } else if (nextSharedText) {
+          setType("text");
+          setNoteText(nextSharedText);
+        }
+      })
+      .catch(() => {
+        Alert.alert("Shared item failed", "The shared item could not be imported.");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editing, loadedSharedImportId, sharedImportId]);
 
   const updateListItem = useCallback((itemId: string, updates: Partial<SavedListItem>): void => {
     setListItems((current) => current.map((item) => (item.id === itemId ? { ...item, ...updates } : item)));
@@ -92,47 +140,77 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
   const save = useCallback(async (): Promise<void> => {
     setIsSaving(true);
     try {
-      let mediaMetadata = undefined;
+      const trimmedNote = noteText.trim();
+      const trimmedLink = linkText.trim();
+      const isMedia = isMediaItemType(type);
+      let storedMediaItems: MediaCollectionItem[] | undefined;
 
-      // Upload media to Supabase Storage if selected
-      if ((type === "image" || type === "video") && selectedMediaUri) {
-        const tempId = editing?.id || `temp-${Date.now()}`;
-        const uploadResult = await uploadMediaToSupabase(selectedMediaUri, tempId, selectedMediaType || "image");
+      if (isMedia) {
+        const uploadGroupId = editing?.id || `temp-${Date.now()}`;
+        const uploadedItems: MediaCollectionItem[] = [];
 
-        if ("error" in uploadResult) {
-          Alert.alert("Upload failed", uploadResult.error);
-          setIsSaving(false);
-          return;
+        for (const mediaItem of mediaItems) {
+          if (mediaItem.storagePath) {
+            uploadedItems.push({
+              id: mediaItem.id,
+              storagePath: mediaItem.storagePath,
+              mediaType: mediaItem.mediaType,
+              thumbnailPath: mediaItem.thumbnailPath,
+            });
+            continue;
+          }
+
+          if (!mediaItem.localUri) continue;
+
+          const uploadResult = await uploadMediaToSupabase(mediaItem.localUri, uploadGroupId, mediaItem.mediaType ?? "image");
+
+          if ("error" in uploadResult) {
+            Alert.alert("Upload failed", uploadResult.error);
+            setIsSaving(false);
+            return;
+          }
+
+          uploadedItems.push({
+            id: mediaItem.id,
+            storagePath: uploadResult.storagePath,
+            mediaType: mediaItem.mediaType ?? "image",
+          });
         }
 
-        mediaMetadata = {
-          storagePath: uploadResult.storagePath,
-          mediaType: selectedMediaType,
-        };
+        storedMediaItems = uploadedItems.length ? uploadedItems : undefined;
       }
 
-      // Handle TikTok URLs
-      if (type === "video" && content.includes("tiktok")) {
-        mediaMetadata = {
-          tiktokUrl: content,
-        };
+      if (editing && isMedia) {
+        const existingPaths = new Set<string>();
+        if (editing.media?.storagePath) existingPaths.add(editing.media.storagePath);
+        editing.mediaItems?.forEach((mediaItem) => {
+          if (mediaItem.storagePath) existingPaths.add(mediaItem.storagePath);
+        });
+
+        const nextPaths = new Set(storedMediaItems?.map((mediaItem) => mediaItem.storagePath).filter((path): path is string => !!path));
+        const removedPaths = Array.from(existingPaths).filter((path) => !nextPaths.has(path));
+        await Promise.all(removedPaths.map(deleteMediaFromSupabase));
       }
 
       const payload = {
         folderId,
-        title: title || suggestTitle(content),
-        description: type === "video" && content.includes("tiktok") ? undefined : content,
-        type,
-        url: type === "link" ? content : undefined,
-        media: mediaMetadata,
-        attachments: attachments.length > 0 ? attachments : undefined,
+        title,
+        description: type === "text" ? trimmedNote || undefined : undefined,
+        type: normalizeItemType(type),
+        url: type === "link" ? trimmedLink || undefined : undefined,
+        sourcePlatform: inferSourcePlatform(sourceUrl),
+        sourceUrl: sourceUrl.trim() || undefined,
+        sharedText: sharedText.trim() || undefined,
+        media: storedMediaItems?.[0],
+        mediaItems: storedMediaItems,
+        attachments: undefined,
         listItems:
           type === "list"
             ? listItems
                 .map((item) => ({ ...item, text: item.text.trim() }))
                 .filter((item) => item.text.length > 0)
             : undefined,
-        richText: content.trim() || undefined,
+        richText: type === "text" ? trimmedNote || undefined : undefined,
         tags: tags
           .split(",")
           .map((tag) => tag.trim())
@@ -146,12 +224,15 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
         navigation.goBack();
       } else {
         const item = createItem(payload);
+        if (sharedImportId) {
+          await clearSharedImport(sharedImportId);
+        }
         navigation.replace("ItemDetail", { itemId: item.id });
       }
     } finally {
       setIsSaving(false);
     }
-  }, [attachments, content, createItem, editing, folderId, listItems, navigation, priority, selectedMediaType, selectedMediaUri, status, tags, title, type, updateItem]);
+  }, [createItem, editing, folderId, linkText, listItems, mediaItems, navigation, noteText, priority, sharedImportId, sharedText, sourceUrl, status, tags, title, type, updateItem]);
 
   return (
     <View style={styles.screen}>
@@ -159,19 +240,8 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <Text style={styles.title}>{editing ? "Edit item" : "Add item"}</Text>
 
-        <Text style={styles.label}>Idea, URL, or media URI</Text>
-        <TextInput
-          style={[styles.input, styles.body]}
-          multiline
-          value={content}
-          onChangeText={setContent}
-          placeholder="Paste or type something worth saving..."
-        />
-
-        <AppButton label="Suggest title, folder & tags" variant="secondary" onPress={applySuggestion} style={styles.button} />
-
         <Text style={styles.label}>Title</Text>
-        <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder={suggestTitle(content)} />
+        <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="What are you saving?" />
 
         <Text style={styles.section}>Type</Text>
         {types.map((choice) => {
@@ -187,6 +257,37 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
             />
           );
         })}
+
+        {type === "text" && (
+          <>
+            <Text style={styles.label}>Note</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              multiline
+              value={noteText}
+              onChangeText={setNoteText}
+              placeholder="Write the thought, reminder, or context..."
+              textAlignVertical="top"
+            />
+          </>
+        )}
+
+        {type === "link" && (
+          <>
+            <Text style={styles.label}>Link</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              multiline
+              value={linkText}
+              onChangeText={setLinkText}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              placeholder="https://example.com"
+              textAlignVertical="top"
+            />
+          </>
+        )}
 
         {type === "list" && (
           <View style={styles.listEditor}>
@@ -224,14 +325,41 @@ export const AddEditItemScreen = ({ navigation, route }: Props) => {
           </View>
         )}
 
-        {(type === "image" || type === "video") && (
-          <MediaPicker
-            onMediaSelected={handleMediaSelected}
-            initialUri={selectedMediaUri}
-            attachments={attachments}
-            onAttachmentsChange={setAttachments}
+        {isMediaItemType(type) && (
+          <MediaCollectionPicker
+            items={mediaItems}
+            onChange={setMediaItems}
             style={styles.button}
           />
+        )}
+
+        {(isMediaItemType(type) || sourceUrl.trim().length > 0) && (
+          <>
+            <Text style={styles.label}>Source URL</Text>
+            <TextInput
+              style={styles.input}
+              value={sourceUrl}
+              onChangeText={setSourceUrl}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              placeholder="Original post URL"
+            />
+          </>
+        )}
+
+        {isMediaItemType(type) && sharedText.trim().length > 0 && (
+          <>
+            <Text style={styles.label}>Shared text</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              multiline
+              value={sharedText}
+              onChangeText={setSharedText}
+              placeholder="Caption or shared text"
+              textAlignVertical="top"
+            />
+          </>
         )}
 
         <Text style={styles.section}>Folder</Text>

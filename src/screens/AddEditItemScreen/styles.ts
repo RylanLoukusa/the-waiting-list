@@ -32,9 +32,8 @@ export const styles = StyleSheet.create({
     color: colors.ink,
     padding: spacing.md,
   },
-  body: {
+  textArea: {
     minHeight: 120,
-    textAlignVertical: "top",
   },
   section: {
     color: colors.ink,

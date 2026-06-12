@@ -5,14 +5,16 @@ import { AppButton } from "../../components/AppButton";
 import { Breadcrumbs } from "../../components/Breadcrumbs";
 import { EmptyState } from "../../components/EmptyState";
 import { FolderCard } from "../../components/FolderCard";
-import { MediaDisplay } from "../../components/MediaDisplay";
+import { MediaCollectionDisplay } from "../../components/MediaCollectionDisplay";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
+import { VideoPreview } from "../../components/VideoPreview";
 import { RootStackParamList } from "../../navigation/types";
 import { useWaitingList } from "../../storage/storage";
 import { Folder, SavedItem } from "../../types/models";
 import { getFolderPatterns } from "../../utils/folderContext";
 import { canAddChildFolder, getChildFolders, getFolderById, getFolderPath, getItemsInFolder } from "../../utils/folderTree";
 import { pickRandomWaitingItem } from "../../utils/itemFilters";
+import { getItemTypeLabel } from "../../utils/itemTypes";
 import { styles } from "./styles";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Folder">;
@@ -45,6 +47,8 @@ const FolderItemRow = React.memo(function FolderItemRow({ item, onOpenItemDetail
   const onPressOpenUrl = useCallback(() => {
     if (item.url) void Linking.openURL(item.url);
   }, [item.url]);
+  const hasStoredMedia = !!item.mediaItems?.length || !!item.media?.storagePath || !!item.media?.tiktokUrl;
+  const shouldShowAttachments = !!item.attachments?.length && !hasStoredMedia;
 
   return (
     <View style={styles.fullItemBlock}>
@@ -52,7 +56,7 @@ const FolderItemRow = React.memo(function FolderItemRow({ item, onOpenItemDetail
       <View style={styles.fullItemCard}>
         <View style={styles.fullItemHeader}>
           <View style={styles.fullItemTitleGroup}>
-            <Text style={styles.fullItemType}>{item.type.toUpperCase()}</Text>
+            <Text style={styles.fullItemType}>{getItemTypeLabel(item.type).toUpperCase()}</Text>
           </View>
           <Pressable onPress={onPress} style={({ pressed }) => [styles.openItemButton, pressed && styles.openItemButtonPressed]}>
             <Text style={styles.openItemButtonText}>Open item</Text>
@@ -65,7 +69,13 @@ const FolderItemRow = React.memo(function FolderItemRow({ item, onOpenItemDetail
           </Pressable>
         )}
 
-        {!item.attachments?.length && <MediaDisplay media={item.media} style={styles.fullItemMedia} />}
+        <MediaCollectionDisplay
+          media={item.media}
+          mediaItems={item.mediaItems}
+          itemHeight={300}
+          itemWidth={300}
+          style={styles.fullItemMedia}
+        />
 
         {!!item.description && <Text style={styles.fullItemDescription}>{item.description}</Text>}
 
@@ -92,15 +102,13 @@ const FolderItemRow = React.memo(function FolderItemRow({ item, onOpenItemDetail
           </View>
         )}
 
-        {!!item.attachments?.length && (
+        {shouldShowAttachments && (
           <View style={styles.fullItemAttachments}>
-            {item.attachments.map((attachment) =>
+            {item.attachments?.map((attachment) =>
               attachment.mediaType === "image" ? (
                 <Image key={attachment.id} source={{ uri: attachment.uri }} style={styles.fullItemAttachmentImage} />
               ) : (
-                <View key={attachment.id} style={styles.fullItemAttachmentVideo}>
-                  <Text style={styles.fullItemAttachmentVideoText}>Video: {attachment.uri.split("/").pop()}</Text>
-                </View>
+                <VideoPreview key={attachment.id} uri={attachment.uri} style={styles.fullItemAttachmentVideo} />
               ),
             )}
           </View>
@@ -231,8 +239,14 @@ export const FolderScreen = ({ navigation, route }: Props) => {
           text: "Delete",
           style: "destructive",
           onPress: () => {
-            deleteFolder(folder.id);
-            navigation.navigate("Home");
+            void (async () => {
+              const result = await deleteFolder(folder.id);
+              if (!result.ok) {
+                Alert.alert("Could not delete folder", result.error ?? "Unable to delete uploaded media.");
+                return;
+              }
+              navigation.navigate("Home");
+            })();
           },
         },
       ],
@@ -352,7 +366,7 @@ export const FolderScreen = ({ navigation, route }: Props) => {
         {folderItems.length === 0 ? (
           <EmptyState
             title="No items here yet."
-            message="Add an idea, link, image, or video to this folder."
+            message="Add a note, list, link, or media item to this folder."
           />
         ) : displayedItems.length === 0 ? (
           <EmptyState

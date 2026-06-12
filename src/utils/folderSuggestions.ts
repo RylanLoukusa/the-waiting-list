@@ -15,11 +15,9 @@ const imageExt = /\.(png|jpg|jpeg|gif|webp)(\?|$)/i;
 
 export const detectItemType = (content: string, mediaUri?: string): ItemType => {
   const text = content.trim().toLowerCase();
-  if (mediaUri?.match(/\.(mov|mp4|m4v|webm)$/i)) return "video";
-  if (mediaUri?.match(/\.(png|jpg|jpeg|gif|webp)$/i)) return "image";
+  if (mediaUri?.match(/\.(mov|mp4|m4v|webm|png|jpg|jpeg|gif|webp)$/i)) return "media";
   if (/^https?:\/\//i.test(text)) {
-    if (videoExt.test(text)) return "video";
-    if (imageExt.test(text)) return "image";
+    if (videoExt.test(text) || imageExt.test(text)) return "media";
     return "link";
   }
   return "text";

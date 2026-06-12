@@ -26,7 +26,18 @@ export const searchFoldersAndItems = (
   return {
     folders: folders.filter((folder) => [folder.name, folder.purpose].filter(Boolean).join(" ").toLowerCase().includes(normalized)),
     items: items.filter((item) =>
-      [item.title, item.description, item.url, item.notes, item.richText, item.tags.join(" "), item.listItems?.map((listItem) => listItem.text).join(" ")]
+      [
+        item.title,
+        item.description,
+        item.url,
+        item.sourceUrl,
+        item.sourcePlatform,
+        item.sharedText,
+        item.notes,
+        item.richText,
+        item.tags.join(" "),
+        item.listItems?.map((listItem) => listItem.text).join(" "),
+      ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()

@@ -3,23 +3,28 @@ import React, { createContext, ReactNode, useCallback, useContext, useEffect, us
 import { Alert } from "react-native";
 import { useAuth } from "../auth/AuthContext";
 import { getSupabase } from "../lib/supabase";
+import { syncShareExtensionFolders } from "../share/sharedImport";
+import { deleteStoredMediaForItems } from "../lib/supabaseStorage";
 import { ensureRemoteRowForUser, pullWaitingListForUser, pushWaitingListForUser } from "../sync/waitingListSync";
 import { seedData } from "../data/seedData";
 import { Folder, SavedItem, WaitingListData } from "../types/models";
 import { createId } from "../utils/id";
-import { canMoveFolder, deleteFolderRecursively } from "../utils/folderTree";
+import { canMoveFolder, deleteFolderRecursively, getFolderTreeIds } from "../utils/folderTree";
+import { normalizeWaitingListData } from "../utils/itemTypes";
 
-const STORAGE_KEY = "the-waiting-list:data:v1";
+const STORAGE_KEY_PREFIX = "the-waiting-list:data:v1";
+const emptyData: WaitingListData = { folders: [], items: [] };
 
 type WaitingListContextValue = WaitingListData & {
   isReady: boolean;
   createFolder: (input: Pick<Folder, "name" | "parentFolderId"> & Partial<Pick<Folder, "icon" | "color" | "purpose">>) => Folder;
   updateFolder: (folderId: string, updates: Partial<Pick<Folder, "name" | "parentFolderId" | "icon" | "color" | "purpose">>) => boolean;
-  deleteFolder: (folderId: string) => void;
+  deleteFolder: (folderId: string) => Promise<{ ok: boolean; error?: string }>;
   createItem: (input: Omit<SavedItem, "id" | "createdAt" | "updatedAt">) => SavedItem;
   updateItem: (itemId: string, updates: Partial<Omit<SavedItem, "id" | "createdAt">>) => void;
-  deleteItem: (itemId: string) => void;
+  deleteItem: (itemId: string) => Promise<{ ok: boolean; error?: string }>;
   resetToSeed: () => void;
+  clearLocalData: () => void;
 };
 
 const WaitingListContext = createContext<WaitingListContextValue | undefined>(undefined);
@@ -29,43 +34,71 @@ const cleanOptionalText = (value?: string): string | undefined => {
   return trimmed ? trimmed : undefined;
 };
 
-export const loadWaitingListData = async (): Promise<WaitingListData> => {
-  const stored = await AsyncStorage.getItem(STORAGE_KEY);
+const storageKeyForUser = (userId?: string | null): string =>
+  userId ? `${STORAGE_KEY_PREFIX}:user:${userId}` : `${STORAGE_KEY_PREFIX}:anonymous`;
+
+export const loadWaitingListData = async (userId?: string | null): Promise<WaitingListData> => {
+  const key = storageKeyForUser(userId);
+  const stored = await AsyncStorage.getItem(key);
   if (!stored) {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(seedData));
-    return seedData;
+    const initialData = userId ? emptyData : seedData;
+    await AsyncStorage.setItem(key, JSON.stringify(initialData));
+    return normalizeWaitingListData(initialData);
   }
-  return JSON.parse(stored) as WaitingListData;
+  return normalizeWaitingListData(JSON.parse(stored) as WaitingListData);
 };
 
-export const saveWaitingListData = async (data: WaitingListData): Promise<void> => {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+export const saveWaitingListData = async (data: WaitingListData, userId?: string | null): Promise<void> => {
+  await AsyncStorage.setItem(storageKeyForUser(userId), JSON.stringify(data));
 };
 
 const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
   const { session, isAuthReady } = useAuth();
   const [data, setData] = useState<WaitingListData>(seedData);
   const [isReady, setIsReady] = useState(false);
+  const activeUserId = isAuthReady ? session?.user?.id ?? null : null;
   const dataRef = useRef(data);
   dataRef.current = data;
   const skipRemotePushRef = useRef(true);
 
   useEffect(() => {
-    loadWaitingListData()
-      .then(setData)
-      .catch(() => setData(seedData))
-      .finally(() => setIsReady(true));
-  }, []);
+    if (!isAuthReady) return;
+
+    let cancelled = false;
+    skipRemotePushRef.current = true;
+    setIsReady(false);
+    setData(activeUserId ? emptyData : seedData);
+
+    void loadWaitingListData(activeUserId)
+      .then((loaded) => {
+        if (!cancelled) setData(loaded);
+      })
+      .catch(() => {
+        if (!cancelled) setData(activeUserId ? emptyData : seedData);
+      })
+      .finally(() => {
+        if (!cancelled) setIsReady(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeUserId, isAuthReady]);
 
   useEffect(() => {
     if (isReady) {
-      void saveWaitingListData(data);
+      void saveWaitingListData(data, activeUserId);
     }
-  }, [data, isReady]);
+  }, [activeUserId, data, isReady]);
+
+  useEffect(() => {
+    if (!isReady) return;
+    void syncShareExtensionFolders(data.folders, data.folders[0]?.id ?? null);
+  }, [data.folders, isReady]);
 
   useEffect(() => {
     if (!isReady || !isAuthReady) return;
-    const userId = session?.user?.id;
+    const userId = activeUserId;
     if (!userId) {
       skipRemotePushRef.current = false;
       return;
@@ -86,6 +119,9 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
         if (cancelled) return;
         if (result.kind === "applied") {
           setData(result.data);
+        } else if (result.kind === "noop_up_to_date") {
+          const local = await loadWaitingListData(userId);
+          if (!cancelled) setData(local);
         } else if (result.kind === "no_row") {
           await ensureRemoteRowForUser(supabase, userId, dataRef.current);
         }
@@ -99,11 +135,11 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       cancelled = true;
     };
-  }, [isReady, isAuthReady, session?.user?.id]);
+  }, [activeUserId, isReady, isAuthReady]);
 
   useEffect(() => {
     if (!isReady || !isAuthReady) return;
-    const userId = session?.user?.id;
+    const userId = activeUserId;
     if (!userId) return;
     const supabase = getSupabase();
     if (!supabase) return;
@@ -114,7 +150,7 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     }, 1500);
 
     return () => clearTimeout(handle);
-  }, [data, isReady, isAuthReady, session?.user?.id]);
+  }, [activeUserId, data, isReady, isAuthReady]);
 
   const createFolder = useCallback<WaitingListContextValue["createFolder"]>((input) => {
     const timestamp = new Date().toISOString();
@@ -157,8 +193,14 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     return didUpdate;
   }, []);
 
-  const deleteFolder = useCallback<WaitingListContextValue["deleteFolder"]>((folderId) => {
+  const deleteFolder = useCallback<WaitingListContextValue["deleteFolder"]>(async (folderId) => {
+    const folderIdsToDelete = getFolderTreeIds(dataRef.current.folders, folderId);
+    const itemsToDelete = dataRef.current.items.filter((item) => folderIdsToDelete.includes(item.folderId));
+    const mediaResult = await deleteStoredMediaForItems(itemsToDelete);
+    if (!mediaResult.ok) return mediaResult;
+
     setData((current) => deleteFolderRecursively(current.folders, current.items, folderId));
+    return { ok: true };
   }, []);
 
   const createItem = useCallback<WaitingListContextValue["createItem"]>((input) => {
@@ -186,15 +228,23 @@ const InnerWaitingListProvider = ({ children }: { children: ReactNode }) => {
     }));
   }, []);
 
-  const deleteItem = useCallback<WaitingListContextValue["deleteItem"]>((itemId) => {
+  const deleteItem = useCallback<WaitingListContextValue["deleteItem"]>(async (itemId) => {
+    const itemToDelete = dataRef.current.items.find((item) => item.id === itemId);
+    if (itemToDelete) {
+      const mediaResult = await deleteStoredMediaForItems([itemToDelete]);
+      if (!mediaResult.ok) return mediaResult;
+    }
+
     setData((current) => ({ ...current, items: current.items.filter((item) => item.id !== itemId) }));
+    return { ok: true };
   }, []);
 
   const resetToSeed = useCallback(() => setData(seedData), []);
+  const clearLocalData = useCallback(() => setData(emptyData), []);
 
   const value = useMemo<WaitingListContextValue>(
-    () => ({ ...data, isReady, createFolder, updateFolder, deleteFolder, createItem, updateItem, deleteItem, resetToSeed }),
-    [data, isReady, createFolder, updateFolder, deleteFolder, createItem, updateItem, deleteItem, resetToSeed],
+    () => ({ ...data, isReady, createFolder, updateFolder, deleteFolder, createItem, updateItem, deleteItem, resetToSeed, clearLocalData }),
+    [data, isReady, createFolder, updateFolder, deleteFolder, createItem, updateItem, deleteItem, resetToSeed, clearLocalData],
   );
 
   return <WaitingListContext.Provider value={value}>{children}</WaitingListContext.Provider>;

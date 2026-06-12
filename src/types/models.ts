@@ -1,4 +1,4 @@
-export type ItemType = "text" | "list" | "link" | "image" | "video";
+export type ItemType = "text" | "list" | "link" | "media" | "image" | "video";
 export type ItemStatus = "waiting" | "planned" | "done" | "skipped";
 export type ItemPriority = "low" | "medium" | "high";
 export type ListItemKind = "check" | "bullet";
@@ -20,6 +20,11 @@ export type MediaMetadata = {
   mediaType?: "image" | "video"; // type of file in storage
   tiktokUrl?: string; // external TikTok URL
   thumbnailPath?: string; // path to thumbnail in storage
+};
+
+export type MediaCollectionItem = MediaMetadata & {
+  id: string;
+  localUri?: string;
 };
 
 export type SavedListItem = {
@@ -50,9 +55,13 @@ export type SavedItem = {
   description?: string;
   type: ItemType;
   url?: string;
+  sourceUrl?: string;
+  sourcePlatform?: string;
+  sharedText?: string;
   mediaUri?: string; // local URI during editing
   thumbnailUri?: string; // local thumbnail URI during editing
   media?: MediaMetadata; // metadata for stored media
+  mediaItems?: MediaCollectionItem[];
   attachments?: ItemAttachment[];
   listItems?: SavedListItem[];
   richText?: string;

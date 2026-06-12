@@ -1,11 +1,10 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppButton } from "../../components/AppButton";
 import { EmptyState } from "../../components/EmptyState";
 import { FolderCard } from "../../components/FolderCard";
 import { ItemCard } from "../../components/ItemCard";
-import { QuickAddModal } from "../../components/QuickAddModal";
 import { ScreenTopBar } from "../../components/ScreenTopBar";
 import { RootStackParamList } from "../../navigation/types";
 import { useWaitingList } from "../../storage/storage";
@@ -47,19 +46,14 @@ const RecentItemRow = React.memo(function RecentItemRow({ item, folderPath, onOp
 export const HomeScreen = ({ navigation }: Props) => {
   const { folders, items } = useWaitingList();
   const { session, signOut } = useAuth();
-  const [quickAddOpen, setQuickAddOpen] = useState(false);
-
-  const onCloseQuickAdd = useCallback(() => {
-    setQuickAddOpen(false);
-  }, []);
 
   const onPressSearch = useCallback(() => {
     navigation.navigate("Search");
   }, [navigation]);
 
-  const onPressQuickAdd = useCallback(() => {
-    setQuickAddOpen(true);
-  }, []);
+  const onPressAddItem = useCallback(() => {
+    navigation.navigate("AddEditItem");
+  }, [navigation]);
 
   const onPressPickSomething = useCallback(() => {
     navigation.navigate("PickSomething");
@@ -129,7 +123,7 @@ export const HomeScreen = ({ navigation }: Props) => {
         </Pressable>
 
         <View style={styles.actions}>
-          <AppButton label="Quick Add" onPress={onPressQuickAdd} style={styles.action} />
+          <AppButton label="Add Item" onPress={onPressAddItem} style={styles.action} />
           <AppButton
             label="Pick Something"
             variant="secondary"
@@ -165,7 +159,7 @@ export const HomeScreen = ({ navigation }: Props) => {
         {recentItems.length === 0 ? (
           <EmptyState
             title="No items here yet."
-            message="Add an idea, link, image, or video to your Waiting List."
+            message="Add a note, list, link, or media item to your Waiting List."
           />
         ) : (
           recentItems.map((item) => (
@@ -184,7 +178,6 @@ export const HomeScreen = ({ navigation }: Props) => {
           onPress={onPressSettings}
           style={styles.settings}
         />
-        <QuickAddModal visible={quickAddOpen} onClose={onCloseQuickAdd} />
       </ScrollView>
     </View>
   );

@@ -252,14 +252,14 @@ export const styles = StyleSheet.create({
   },
   fullItemAttachmentImage: {
     borderRadius: 14,
-    height: 220,
+    height: 300,
     width: "100%",
   },
   fullItemAttachmentVideo: {
     alignItems: "center",
     backgroundColor: "#000",
     borderRadius: 14,
-    height: 160,
+    height: 300,
     justifyContent: "center",
     width: "100%",
   },
